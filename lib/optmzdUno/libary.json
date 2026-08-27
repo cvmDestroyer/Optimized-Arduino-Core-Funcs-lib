@@ -1,0 +1,22 @@
+{
+  "name": "optmzdArd",
+  "version": "1.0.0",
+  "description": "a lib where Arduino Core functions are rewitten with direct register",
+  "keywords": ["sensors", "communication", "cpp"],
+  "authors": [
+    {
+      "name": "Tim Seiffer",
+      "email": "tim.seiffer.@outlook.de",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://https://github.com/cvmDestroyer/Arduino-Uno-Optimized-lib",
+  "repository": {
+    "type": "git",
+    "url": "https://https://github.com/cvmDestroyer/Arduino-Uno-Optimized-lib.git"
+  },
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": ["optmzdArd.h"]
+}
