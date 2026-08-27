@@ -2,7 +2,7 @@
 #include "wiring_private.h"
 #include <Arduino.h>
 #include <stdint.h>
-#include "optmzdUno.h"
+#include "optmzdArd.h"
 
 volatile uint8_t currentPin = 0;
 
