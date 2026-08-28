@@ -31,10 +31,9 @@ namespace ard
     uint32_t pulseIn(uint8_t pin, uint8_t state)                       { uint32_t ret{::pulseIn(pin, state, 1000000UL)    }; return ret; }
     uint32_t pulseInLong(uint8_t pin, uint8_t state)                   { uint32_t ret{::pulseInLong(pin, state, 1000000UL)}; return ret; }
     uint32_t pulseIn(uint8_t pin, uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(pin, state, timeout)    }; return ret;   }
-    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(pin, state, timeout)}; return ret;   }
-
-    void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) { ::attachInterrupt(interruptNum, *userFunc, mode);     }
-    void detachInterrupt(uint8_t interruptNum)                                   { ::detachInterrupt(interruptNum);                      }
+    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(pin, state, timeout)}; return ret;    }
+    //void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) { ::attachInterrupt(interruptNum, *userFunc, mode);     }
+    //void detachInterrupt(uint8_t interruptNum)                                   { ::detachInterrupt(interruptNum);                      }
 
     void tone(uint8_t pin, uint16_t frequency)                         { ::tone(pin, frequency);                                         }
     void tone(uint8_t pin, uint16_t frequency, uint32_t duration)      { ::tone(pin, frequency, duration);                               }
@@ -334,6 +333,104 @@ namespace uno
             _delay_us(1);
         }
     }
+    uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout)
+    {
+        if (pin > 7 && pin < 14)
+        {
+            uint8_t bit = (1 << (pin - 8));
+            uint8_t stateMask = state ? bit : 0;
+            
+            uint32_t cycles = 0;
+            uint32_t maxCycles = timeout * (F_CPU / 1000000L) / 16;
+            
+            while ((PINB & bit) == stateMask) {      // waiting for the unfinished pusle to finish so we can start with a new pulse
+                if (cycles++ >= maxCycles) return 0; // other wise our calculated result might not be what the user wanted
+            }
+            
+            while ((PINB & bit) != stateMask) { // now we can wait for the new pulse
+                if (cycles++ >= maxCycles) return 0;
+            }
+        
+            // and now we can calculate the pulseCycles NOT US
+            uint32_t pulseCycles = 0;
+            while ((PINB & bit) == stateMask) {
+                if (pulseCycles++ >= maxCycles) return 0;
+            }
+        
+            // here we calc the micros it is made prossible by looking at how 
+            // many clock cycles the asm needs for one loop needs
+            return (pulseCycles * 16) / (F_CPU / 1000000L);
+        } 
+        else if (pin >= 0 && pin < 8) 
+        {
+            uint8_t bit = (1 << pin);
+            uint8_t stateMask = state ? bit : 0;
+            
+            uint32_t cycles = 0;
+            
+            uint32_t maxCycles = timeout * (F_CPU / 1000000L) / 16;
+
+            while ((PIND & bit) == stateMask) {
+                if (cycles++ >= maxCycles) return 0;
+            } 
+            while ((PIND & bit) != stateMask) {
+                if (cycles++ >= maxCycles) return 0;
+            }
+
+            uint32_t pulseCycles = 0;
+            while ((PIND & bit) == stateMask) {
+                if (pulseCycles++ >= maxCycles) return 0;
+            }
+
+            return (pulseCycles * 16) / (F_CPU / 1000000L);
+        }
+    }
+    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout) 
+    {
+        if (pin > 7 && pin < 14) 
+        {
+            uint8_t bit = (1 << (pin - 8));
+            uint8_t stateMask = state ? bit : 0;
+            
+            const uint32_t startMicros = uno::micros();
+
+            while ((PINB & bit) == stateMask) {
+                if (uno::micros() - startMicros >= timeout) return 0;
+            }
+            while ((PINB & bit) != stateMask) {
+                if (uno::micros() - startMicros >= timeout) return 0;
+            }
+
+            const uint32_t pulseStart = uno::micros();
+
+            while ((PINB & bit) == stateMask) {
+                if (uno::micros() - startMicros >= timeout) return 0;
+            }
+
+            return uno::micros() - pulseStart; 
+        } 
+        else if (pin >= 0 && pin < 8) 
+        {
+            uint8_t bit = (1 << pin);
+            uint8_t stateMask = state ? bit : 0;
+            const uint32_t startMicros = uno::micros();
+
+            while ((PIND & bit) == stateMask) {
+                if (uno::micros() - startMicros >= timeout) return 0;
+            }
+            while ((PIND & bit) != stateMask) {
+                if (uno::micros() - startMicros >= timeout) return 0;
+            }
+
+            const uint32_t pulseStart = uno::micros();
+
+            while ((PIND & bit) == stateMask) {
+                if (uno::micros() - startMicros >= timeout) return 0;
+            }
+
+            return uno::micros() - pulseStart; 
+        }
+    }
 
     void tone(uint8_t pin, uint16_t frequency)
     {
@@ -360,145 +457,6 @@ namespace uno
         TIMSK2 &= ~(1 << OCIE2A);
         digitalWrite(currentPin, LOW);
     }
-    
-    // this just for the template part cool ik :)
-    template<uint8_t PIN> struct hardwearLvl;
-    #define DEFINE_PIN(pin, port_letter, bit, adc_ch, is_pwm, pwm_reg, tccr_reg, com_bit) \
-    template<> struct hardwearLvl<pin> { \
-        static constexpr uintptr_t PORT    = (uintptr_t)&PORT##port_letter; \
-        static constexpr uintptr_t PIN_REG = (uintptr_t)&PIN##port_letter; \
-        static constexpr uintptr_t DDR     = (uintptr_t)&DDR##port_letter; \
-        static constexpr uint8_t   BIT     = bit; \
-        static constexpr uint8_t   ADC_CH  = adc_ch; \
-        static constexpr bool      HAS_PWM  = is_pwm; \
-        static constexpr uintptr_t PWM_REG  = (uintptr_t)(pwm_reg); \
-        static constexpr uintptr_t TCCR_REG = (uintptr_t)(tccr_reg); \
-        static constexpr uint8_t   COM_BIT  = com_bit; \
-    };
-
-    template<uint8_t PIN, bool HAS_PWM = hardwearLvl<PIN>::HAS_PWM> // these are for anlogRead cuz
-    struct analogWriteHelper {                                      // if constexpr only works cince C++ 17 and 
-        static void apply(uint8_t val) {                            // avr-compiler are stuck on C++ 11
-            digitalWrite<PIN>(val >= 128);
-        }
-    };
-
-    template<uint8_t PIN>
-    struct analogWriteHelper<PIN, true> {
-        // i feel like this doesnt need explaination its in normal analogWrite if you want it
-        if (val == 0) {
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) &= ~hardwearLvl<PIN>::COM_BIT;
-            digitalWrite<PIN>(LOW);
-        }
-        else if (val == 255) {
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) &= ~hardwearLvl<PIN>::COM_BIT;
-            digitalWrite<PIN>(HIGH);
-        }
-        else {
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PWM_REG) = val;
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) |= hardwearLvl<PIN>::COM_BIT;
-        }
-    };
-
-    // this took me half an hour ✌️🫩
-    // pin : just the arduino pin yk? 
-    // reg : this is what of the 3 register the pin is placed (B, C, D)
-    // bit : where the bit is placed in the byte
-    // adc : basicly the bit thingy just for Analog Digital Converter (255 = no adc/analogPin) 
-    // pwm : does the pin support pwm? (true/false)
-    // OCR : just saves the pwm val 0-255 (Output Compare Register)
-    // TCCR: control-register of timers (Timer/Counter Control Register)
-    // COM : it is the bitmask to wire the pin to the hardware timer (Compare Output Mode)
-    // ---------------------------------------------------------------------------------------
-    //         pin  reg  bit  adc   pwm     OCR       TCCR           COM
-    DEFINE_PIN( 0,   D,   0,  255, false,    0,        0,             0        )
-    DEFINE_PIN( 1,   D,   1,  255, false,    0,        0,             0        )
-    DEFINE_PIN( 2,   D,   2,  255, false,    0,        0,             0        )
-    DEFINE_PIN( 3,   D,   3,  255, true , &OCR2B,  &TCCR2A,   (1 << COM2B1)    ) // com bit 5
-    DEFINE_PIN( 4,   D,   4,  255, false,    0,        0,             0        ) 
-    DEFINE_PIN( 5,   D,   5,  255, true , &OCR0B,  &TCCR0A,   (1 << COM0B1)    ) // com bit 5
-    DEFINE_PIN( 6,   D,   6,  255, true , &OCR0A,  &TCCR0A,   (1 << COM0A1)    ) // com bit 7
-    DEFINE_PIN( 7,   D,   7,  255, false,    0,        0,             0        )
-
-    DEFINE_PIN( 8,   B,   0,  255, false,    0,        0,             0        )
-    DEFINE_PIN( 9,   B,   1,  255, true , &OCR1A,  &TCCR1A,   (1 << COM1A1)    ) // com bit 7
-    DEFINE_PIN( 10,  B,   2,  255, true , &OCR1B,  &TCCR1A,   (1 << COM1B1)    ) // com bit 5
-    DEFINE_PIN( 11,  B,   3,  255, true , &OCR2A,  &TCCR2A,   (1 << COM2A1)    ) // com bit 7
-    DEFINE_PIN( 12,  B,   4,  255, false,    0,        0,             0        )
-    DEFINE_PIN( 13,  B,   5,  255, false,    0,        0,             0        )
-
-    DEFINE_PIN( 14,  C,   0,   0,  false,    0,        0,             0        )
-    DEFINE_PIN( 15,  C,   1,   1,  false,    0,        0,             0        )
-    DEFINE_PIN( 16,  C,   2,   2,  false,    0,        0,             0        )
-    DEFINE_PIN( 17,  C,   3,   3,  false,    0,        0,             0        )
-    DEFINE_PIN( 18,  C,   4,   4,  false,    0,        0,             0        )
-    DEFINE_PIN( 19,  C,   5,   5,  false,    0,        0,             0        )
-
-    // templates
-    template<uint8_t PIN>
-    void pinMode(uint8_t func) {
-        volatile uint8_t* outputReg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::DDR)};
-        volatile uint8_t* pullupReg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
-        constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
-
-        if (func == _OUTPUT) {
-           *outputReg |= mask;
-           *pullupReg &= ~mask;
-        } else if (func == _INPUT_PULLUP) {
-           *outputReg &= ~mask;
-           *pullupReg |= mask;
-        } else if (func == _INPUT) {
-           *outputReg &= ~mask;
-           *pullupReg &= ~mask;
-        }
-    }
-    template<uint8_t PIN>
-    void digitalWrite(uint8_t pin, bool HILO) {
-        volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
-        constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
-    
-        if (val)
-            *reg |= mask;
-        else
-            *reg &= ~mask;
-    }
-    template<uint8_t PIN>
-    bool digitalRead(uint8_t pin) {
-        volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PIN_REG)};
-        constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
-
-        return (*reg & mask);
-    }
-    template<uint8_t PIN>
-    uint16_t analogRead(uint8_t pin) {
-        static_assert(hardwearLvl<PIN>::ADC_CH != 255, "ERROR: analogRead can only read anlog pins PWM DOES NOT COUNT(~pin) onyl A0 - A5");
-
-        constexpr uint8_t channel = hardwearLvl<PIN>::ADC_CH;
-        
-        ADMUX = (ADMUX & 0xF0) | (channel & 0x07);
-        ADCSRA |= (1 << ADSC);
-        while (ADCSRA & (1 << ADSC));
-
-        return ADC;
-    }
-    template<uint8_t PIN>
-    void analogWrite(uint8_t val) {
-        analogWriteHelper<PIN>::apply(val);
-    }
-    template<uint8_t PIN>
-    uint32_t pulseIn(uint8_t pin, uint8_t state)                      {}
-    template<uint8_t PIN>
-    uint32_t pulseInLong(uint8_t pin, uint8_t state)                  {}
-    template<uint8_t PIN>
-    uint32_t pulseIn(uint8_t pin, uint8_t state, uint32_t timeout)    {}
-    template<uint8_t PIN>
-    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout){}
-    template<uint8_t PIN>
-    void tone(uint8_t pin, uint16_t frequency)                        {}
-    template<uint8_t PIN>
-    void tone(uint8_t pin, uint16_t frequency, uint32_t duration)     {}
-    template<uint8_t PIN>
-    void noTone(uint8_t pin)                                          {}
 
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance)
@@ -560,25 +518,9 @@ namespace uno
         OCR2A = static_cast<uint8_t>(ocrValue);
         OCR2B = static_cast<uint8_t>(ocrValue / 2); // macht ne welle draus das halt auch funktioniert
     }
-    void noTone() {
+    void noTone(void) {
         TIMSK2 &= ~(1 << OCIE2A);
         digitalWrite(3, LOW);
-    }
-    void initTimer()
-    {
-        #ifdef ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0
-            TCCR0A = (1 << WGM01); // ctc NOT pwm (not safe libs like servo might not work inlcuding pin 5 and 6)  
-            TCCR0B = (1 << CS01) | (1 << CS00);
-  
-            OCR0A = 249; // (250 steps are exactly 1s (machines start at 0 so thats why 249))
-  
-            TIMSK0 |= (1 << OCIE0A);
-        #else
-            TCCR0A = (1 << WGM01) | (1 << WGM00); // fast pwm NOT ctc (safe)
-            TCCR0B = (1 << CS01) | (1 << CS00);   
-        
-            TIMSK0 |= (1 << TOIE0);
-        #endif
     }
 }
 
