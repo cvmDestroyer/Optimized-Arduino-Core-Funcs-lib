@@ -85,24 +85,41 @@ namespace ard // <- done
     void noTone(uint8_t pin);
 
     // templates 
-    template<uint8_t PIN> void pinMode(uint8_t func);
-    template<uint8_t PIN> void digitalWrite(bool HILO);
-    template<uint8_t PIN> bool digitalRead();
-    template<uint8_t PIN> uint16_t analogRead();
-    template<uint8_t PIN> void analogWrite(uint8_t val);
+    template<uint8_t PIN> void pinMode(uint8_t func)    { ::pinMode(PIN, func);                        }
+    template<uint8_t PIN> void digitalWrite(bool val)   { ::digitalWrite(PIN, val);                    }
+    template<uint8_t PIN> bool digitalRead(void)        { bool ret{::digitalRead(PIN)};    return ret; }
+    template<uint8_t PIN> uint16_t analogRead(void)     { uint16_t ret{::analogRead(PIN)}; return ret; }
+    template<uint8_t PIN> void analogWrite(uint8_t val) { ::analogWrite(PIN, val);                     }
 
-    template<uint8_t PIN> uint32_t pulseIn(uint8_t state);
-    template<uint8_t PIN> uint32_t pulseInLong(uint8_t state);
-    template<uint8_t PIN> uint32_t pulseIn(uint8_t state, uint32_t timeout);
-    template<uint8_t PIN> uint32_t pulseInLong(uint8_t state, uint32_t timeout);
+    template<uint8_t PIN> uint32_t pulseIn(uint8_t state)                       { uint32_t ret{::pulseIn(PIN, state, 1000000UL)    }; return ret; }
+    template<uint8_t PIN> uint32_t pulseInLong(uint8_t state)                   { uint32_t ret{::pulseInLong(PIN, state, 1000000UL)}; return ret; }
+    template<uint8_t PIN> uint32_t pulseIn(uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(PIN, state, timeout)    };   return ret; }
+    template<uint8_t PIN> uint32_t pulseInLong(uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(PIN, state, timeout)};   return ret; }
 
-    template<uint8_t PIN> void tone(uint16_t frequency);
-    template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration);
-    template<uint8_t PIN> void noTone();
+    template<uint8_t PIN> void tone(uint16_t frequency)                   { ::tone(PIN, frequency);           }
+    template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration){ ::tone(PIN, frequency, duration); }
+    template<uint8_t PIN> void noTone(void)                               { ::noTone(PIN);                    }
+
+    // this is if someone wants to write a lib with optmzdArd.h included
+    // the thought proccess is if someone writes a lib for every chip they might use somting like this:
+    // #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+    // namespace gpio = uno;
+    // #else
+    // namespace gpio = ard;
+    // #endif
+    // and than the template variants fall short and you are forced to use the 'normal' version
+    // but if i do it like this both version work
 }
 
 namespace uno
 {
+    namespace privat
+    {
+        extern volatile uint8_t currentPin;
+        extern volatile uint32_t timer0_millis;
+        extern volatile uint8_t timer0_fract;
+        extern volatile uint32_t timer0_overflow_count;
+    }
     void pinMode(uint8_t pin, uint8_t func);     // <- done
     void digitalWrite(uint8_t pin, bool HILO);   // <- done
     bool digitalRead(uint8_t pin);               // <- done
@@ -115,9 +132,9 @@ namespace uno
     void delay(uint32_t ms);                     // <- done
     void delayMicroseconds(uint16_t us);         // <- done
     uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout);                   // <- done
-    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout);            //
+    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout);            //
     uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout = 1000000L);        // <- done
-    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout = 1000000L); //
+    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout = 1000000L); //
     
     void tone(uint8_t pin, uint16_t frequency); // <- done
     void noTone(uint8_t pin);                   // <- done
@@ -148,18 +165,21 @@ namespace uno
     template<uint8_t PIN>
     struct analogWriteHelper<PIN, true> {
         // i feel like this doesnt need explaination its in normal analogWrite if you want it
-        if (val == 0) {
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) &= ~hardwearLvl<PIN>::COM_BIT;
-            digitalWrite<PIN>(LOW);
+        static void apply(uint8_t val) {
+            if (val == 0) {
+                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) &= ~hardwearLvl<PIN>::COM_BIT;
+                digitalWrite<PIN>(LOW);
+            }
+            else if (val == 255) {
+                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) &= ~hardwearLvl<PIN>::COM_BIT;
+                digitalWrite<PIN>(HIGH);
+            }
+            else {
+                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PWM_REG) = val;
+                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) |= hardwearLvl<PIN>::COM_BIT;
+            }
         }
-        else if (val == 255) {
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) &= ~hardwearLvl<PIN>::COM_BIT;
-            digitalWrite<PIN>(HIGH);
-        }
-        else {
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PWM_REG) = val;
-            *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) |= hardwearLvl<PIN>::COM_BIT;
-        }
+        
     };
 
     // this took me half an hour ✌️🫩
@@ -213,7 +233,7 @@ namespace uno
            *pullupReg &= ~mask;
         }
     }
-    template<uint8_t PIN> void digitalWrite(bool HILO) {
+    template<uint8_t PIN> void digitalWrite(bool val) {
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
     
@@ -291,9 +311,38 @@ namespace uno
     template<uint8_t PIN> uint32_t pulseInLong(bool state) {
         return pulseInLong<PIN>(state, 1000000UL);
     }
-    template<uint8_t PIN> void tone(uint16_t frequency)                        {}
-    template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration)     {}
-    template<uint8_t PIN> void noTone(void)                                    {}
+    template<uint8_t PIN> void tone(uint16_t frequency) {
+        if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); digitalWrite<PIN>(_LOW); return; }
+        uno::privat::currentPin = PIN;
+        pinMode<PIN>(_OUTPUT);
+
+        uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
+                             (frequency < 976) ? 128  : (frequency < 1953) ? 64 :
+                             (frequency < 7812) ? 32  : 8; 
+        uint8_t presBit    = (frequency < 244)  ? ((1 << CS22) | (1 << CS21) | (1 << CS20)) :
+                             (frequency < 488)  ? ((1 << CS22) | (1 << CS21)) :
+                             (frequency < 976)  ? ((1 << CS22) | (1 << CS20)) :
+                             (frequency < 1953) ? (1 << CS22) :
+                             (frequency < 7812) ? ((1 << CS21) | (1 << CS20)) : (1 << CS21);
+
+        TCCR2A = (1 << WGM21);
+        TCCR2B = presBit;
+        OCR2A = static_cast<uint8_t>((16000000UL / (2UL * prescaler * frequency)) - 1);
+        TIMSK2 |= (1 << OCIE2A);
+    }
+    template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration) {
+        tone<PIN>(frequency);
+
+        if (duration > 0) 
+            uno::privat::toggleCount = (2UL * frequency * duration) / 1000UL;
+        else 
+            uno::privat::toggleCount = 0; 
+    
+    }
+    template<uint8_t PIN> void noTone(void) {
+        TIMSK2 &= ~(1 << OCIE2A);
+        digitalWrite<PIN>(_LOW);
+    }
 
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance);

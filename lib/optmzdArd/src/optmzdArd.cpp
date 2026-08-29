@@ -38,44 +38,6 @@ namespace ard
     void tone(uint8_t pin, uint16_t frequency)                         { ::tone(pin, frequency);                                         }
     void tone(uint8_t pin, uint16_t frequency, uint32_t duration)      { ::tone(pin, frequency, duration);                               }
     void noTone(uint8_t pin)                                           { ::noTone(pin);                                                  }
-
-    // template versions - only for compability reasons
-
-    template<uint8_t PIN>
-    void pinMode(uint8_t func)                            { ::pinMode(PIN, func);                                           }
-    template<uint8_t PIN>
-    void digitalWrite(bool HILO)                          { ::digitalWrite(PIN, HILO);                                      }
-    template<uint8_t PIN>
-    bool digitalRead()                                    { bool ret{::digitalRead(PIN)};    return ret;                    }
-    template<uint8_t PIN>
-    uint16_t analogRead()                                 { uint16_t ret{::analogRead(PIN)}; return ret;                    }
-    template<uint8_t PIN>
-    void analogWrite(uint8_t val)                         { ::analogWrite(PIN, val);                                        }
-
-    template<uint8_t PIN>
-    uint32_t pulseIn(uint8_t state)                       { uint32_t ret{::pulseIn(PIN, state, 1000000UL)    }; return ret; }
-    template<uint8_t PIN>
-    uint32_t pulseInLong(uint8_t state)                   { uint32_t ret{::pulseInLong(PIN, state, 1000000UL)}; return ret; }
-    template<uint8_t PIN>
-    uint32_t pulseIn(uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(PIN, state, timeout)    }; return ret;   }
-    template<uint8_t PIN>
-    uint32_t pulseInLong(uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(PIN, state, timeout)}; return ret;   }
-
-    template<uint8_t PIN>
-    void tone(uint16_t frequency)                         { ::tone(PIN, frequency);                                         }
-    template<uint8_t PIN>
-    void tone(uint16_t frequency, uint32_t duration)      { ::tone(PIN, frequency, duration);                               }
-    template<uint8_t PIN>
-    void noTone()                                         { ::noTone(PIN);
-    // this is if someone wants to write a lib with optmzdArd.h included
-    // the thought proccess is if someone writes a lib for every chip they might use somting like this:
-    // #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
-    // namespace gpio = uno;
-    // #else
-    // namespace gpio = ard;
-    // #endif
-    // and than the template variants fall short and you are forced to use the 'normal' version
-    // but if i do it like this both version work
 }
 
 namespace uno
@@ -83,12 +45,16 @@ namespace uno
     namespace privat
     {
         volatile uint8_t currentPin = 0;
+        volatile uint32_t toggleCount = 0;
         volatile uint32_t timer0_millis = 0;
-        uint8_t timer0_fract = 0;
+        volatile uint8_t timer0_fract = 0;
         volatile uint32_t timer0_overflow_count = 0;
     }
     void pinMode(uint8_t pin, uint8_t func)
     {
+        uint8_t oldSREG = SREG;
+        cli();
+
         if (pin >= 0 && pin <= 7) 
         {
             if (func == _OUTPUT) {
@@ -116,6 +82,8 @@ namespace uno
                 PORTB |= (1 << bit);
             }
         }
+
+        SREG = oldSREG;
     }
     void digitalWrite(uint8_t pin, bool HILO)
     {
@@ -436,21 +404,22 @@ namespace uno
     {
         // here we do the other method whith the ISR
         // but its basicly the same thing as 'void tone(uint16_t frequency);'
-        currentPin = pin;
-        pinMode(currentPin, OUTPUT);
+        if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); digitalWrite(pin ,_LOW); return; }
+        uno::privat::currentPin = pin;
+        pinMode(pin, _OUTPUT);
 
-        TCCR2A = 0;
-        TCCR2B = 0;
-        TCNT2 = 0;
+        uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
+                             (frequency < 976) ? 128  : (frequency < 1953) ? 64 :
+                             (frequency < 7812) ? 32  : 8; 
+        uint8_t presBit    = (frequency < 244)  ? ((1 << CS22) | (1 << CS21) | (1 << CS20)) :
+                             (frequency < 488)  ? ((1 << CS22) | (1 << CS21)) :
+                             (frequency < 976)  ? ((1 << CS22) | (1 << CS20)) :
+                             (frequency < 1953) ? (1 << CS22) :
+                             (frequency < 7812) ? ((1 << CS21) | (1 << CS20)) : (1 << CS21);
 
-        TCCR2A |= (1 << WGM21);
-
-        TCCR2B |= (1 << CS22) | (1 << CS21);
-
-        unsigned long ocrVal = (16000000 / (2 * 256 * frequency)) - 1; // oops just relized i didnt to this one yet
-                                                                       // i'll do do it some other time its easy anyways
-        OCR2A = static_cast<uint8_t>(ocrVal);
-
+        TCCR2A = (1 << WGM21);
+        TCCR2B = presBit;
+        OCR2A = static_cast<uint8_t>((16000000UL / (2UL * prescaler * frequency)) - 1);
         TIMSK2 |= (1 << OCIE2A);
     }
     void noTone(uint8_t pin) {
@@ -485,46 +454,45 @@ namespace uno
 
         DDRD |= (1 << PB3);
         if (frequency < 61) { // our prescaler is too bad for anthing under 61 so we just turn it off
+            TIMSK2 &= ~(1 << OCR2A);
             digitalWrite(3, LOW);
             return;
         }
-                                   // we can save the prescaler bits here for example if i want a prescaler of 1024 i could just write 0b00000110
-        uint8_t prescalerBits = 0; // but its easier to understand it with CS2x or it just a bif mess         
-        uint32_t ocrValue = 0;
 
-        if (frequency < 244) {
-            ocrValue = (16000000UL / (1024UL * frequency)) - 1; // the formula is: clock frequency / (prescaler * frequency) - 1 (because machines start at 0 NOT 1 and the clock frequnxy is 16 mio(UNO))
-            prescalerBits = (1 << CS22) | (1 << CS21) | (1 << CS20);
-        } else if (frequency < 488) {
-            ocrValue = (16000000UL / (256UL * frequency)) - 1;
-            prescalerBits = (1 << CS22) | (1 << CS21);
-        } else if (frequency < 976) {
-            ocrValue = (16000000UL / (128UL * frequency)) - 1;
-            prescalerBits = (1 << CS22) | (1 << CS20);
-        } else if (frequency < 1953) {
-            ocrValue = (16000000UL / (64UL * frequency)) - 1;
-            prescalerBits = (1 << CS22);
-        } else if (frequency < 7812) {
-            ocrValue = (16000000UL / (32UL * frequency)) - 1;
-            prescalerBits = (1 << CS21) | (1 << CS20);
-        } else {
-            ocrValue = (16000000UL / (8UL * frequency)) - 1;
-            prescalerBits = (1 << CS21);
-        }
+        uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
+                             (frequency < 976) ? 128  : (frequency < 1953) ? 64 :
+                             (frequency < 7812) ? 32  : 8; 
+        uint8_t presBit    = (frequency < 244)  ? ((1 << CS22) | (1 << CS21) | (1 << CS20)) :
+                             (frequency < 488)  ? ((1 << CS22) | (1 << CS21)) :
+                             (frequency < 976)  ? ((1 << CS22) | (1 << CS20)) :
+                             (frequency < 1953) ? (1 << CS22) :
+                             (frequency < 7812) ? ((1 << CS21) | (1 << CS20)) : (1 << CS21);
 
-        TCCR2A = (1 << COM2B1) | (1 << WGM21) | (1 << WGM20); // WGM22 ist in control-register b weil
-        TCCR2B = (1 << WGM22) | prescalerBits;                // weil kein platz mehr in a war (wurde im nachhinein hinzugefügt)
-        // prescaler wird wieder geladen
-        OCR2A = static_cast<uint8_t>(ocrValue);
-        OCR2B = static_cast<uint8_t>(ocrValue / 2); // macht ne welle draus das halt auch funktioniert
+        uint32_t ocr {static_cast<uint8_t>((16000000UL / (prescaler * frequency)) - 1)};
+
+        TCCR2A = (1 << COM2B1) | (1 << WGM21) | (1 << WGM20); // WGM22 ist in control-register B weil
+        TCCR2B = (1 << WGM22) | presBit;                      // weil kein platz mehr in A war (wurde im nachhinein hinzugefügt)
+        OCR2A = static_cast<uint8_t>(ocr);
+        OCR2B = static_cast<uint8_t>(ocr / 2); // macht ne welle draus das halt auch funktioniert
     }
     void noTone(void) {
-        TIMSK2 &= ~(1 << OCIE2A);
+        TIMSK2 &= ~(1 << OCR2A);
         digitalWrite(3, LOW);
     }
 }
 
-ISR(TIMER2_COMPA_vect) { digitalWrite(uno::privat::currentPin, !digitalRead(uno::privat::currentPin)); } 
+ISR(TIMER2_COMPA_vect) { 
+    uno::digitalWrite(uno::privat::currentPin, !uno::digitalRead(uno::privat::currentPin));
+
+    if (uno::privat::toggleCount > 0) {
+        uno::privat::toggleCount--;
+        
+        if (uno::privat::toggleCount == 0) {
+            TIMSK2 &= ~(1 << OCIE2A);
+            uno::digitalWrite(uno::privat::currentPin, LOW);
+        }
+    } 
+} 
 
 // uno timer0
 #ifdef ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0
@@ -539,7 +507,7 @@ ISR(TIMER2_COMPA_vect) { digitalWrite(uno::privat::currentPin, !digitalRead(uno:
         uint8_t f = uno::privat::timer0_fract;
 
         m += 1;
-        f += 3; // theres alittle error this is just the correction(24/1000 * 125 = 3)
+        f += 3; // theres alittle error this is just the correction
         if (f >= 125) {
             f -= 125;
             m += 1;
