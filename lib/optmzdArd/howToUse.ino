@@ -12,20 +12,24 @@
 // clang-format off
 #include <optmzdArd.h> // if your not using Platformio this must be replaced with[ #include "optmzdUno.h" ]
 
-constexpr uint8_t led{2};
+constexpr uint8_t led{6};
 constexpr uint8_t button{3};
-constexpr uint8_t analogThingIn{6};
-constexpr uint8_t analogThingOut{6};
+constexpr uint8_t analogThingIn{A1};
 
-void loop() {
+void setup() {
     uno::pinMode(led, OUTPUT);
     uno::pinMode(button, INPUT_PULLUP);
     uno::pinMode(analogThingIn, INPUT);
-    uno::pinMode(analogThingOut, OUTPUT);
+
+    // template variant for even faster execution just make sure 
+    // all pind always come in to the <> brackets rest ist the same
+    uno::pinMode<led>(OUTPUT);
+    uno::pinMode<button>(INPUT_PULLUP);
+    uno::pinMode<analogThingIn>(INPUT);
 }
 
-void setupt() {
-    uno::analogWrite(analogThingOut, 200); // 0-255
+void loop() {
+    uno::analogWrite(led, 200); // 0-255
     uno::digitalWrite(led, HIGH);
 
     if (uno::analogRead(analogThingIn) < 200)
@@ -42,4 +46,25 @@ void setupt() {
                         // simulate the turn by turning the thingy on and off (with an ISR)
     uno::noTone(10);
     uno::noTone(3);
+
+    // template variant for even faster execution just remember 
+    // all pins come in to the <> brackets rest ist the same
+    uno::analogWrite<led>(200);
+    uno::digitalWrite<led>(HIGH);
+
+    if (uno::analogRead<analogThingIn>() < 200)
+        Serial.println("Reading somthing analog in max speed (almost)");
+   
+    if (uno::digitalRead<button>() == LOW)
+        Serial.println("this button was read in one clock cycle (i think)");
+    
+    uno::tone<10>(200);
+    uno::noTone<10>();
+
+    uint8_t time {uno::millis()};
+    while (uno::millis() - time < 200) {
+        Serial.println("jo some millis() thingy");
+    }
+
+    uno::delay(50);
 }

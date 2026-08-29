@@ -306,15 +306,15 @@ namespace uno
         return uno::micros() - pulseStart;
     }
     template<uint8_t PIN> uint32_t pulseIn(bool state) {
-        return pulseIn<PIN>(state, 1000000L);
+        return uno::pulseIn<PIN>(state, 1000000L);
     }
     template<uint8_t PIN> uint32_t pulseInLong(bool state) {
-        return pulseInLong<PIN>(state, 1000000UL);
+        return uno::pulseInLong<PIN>(state, 1000000UL);
     }
     template<uint8_t PIN> void tone(uint16_t frequency) {
         if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); digitalWrite<PIN>(_LOW); return; }
         uno::privat::currentPin = PIN;
-        pinMode<PIN>(_OUTPUT);
+        uno::pinMode<PIN>(_OUTPUT);
 
         uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
                              (frequency < 976) ? 128  : (frequency < 1953) ? 64 :
@@ -331,7 +331,7 @@ namespace uno
         TIMSK2 |= (1 << OCIE2A);
     }
     template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration) {
-        tone<PIN>(frequency);
+        uno::tone<PIN>(frequency);
 
         if (duration > 0) 
             uno::privat::toggleCount = (2UL * frequency * duration) / 1000UL;
@@ -341,29 +341,14 @@ namespace uno
     }
     template<uint8_t PIN> void noTone(void) {
         TIMSK2 &= ~(1 << OCIE2A);
-        digitalWrite<PIN>(_LOW);
+        uno::digitalWrite<PIN>(_LOW);
     }
 
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance);
     void tone(uint16_t frequency);
     void noTone(void);
-    void initTimer(void)
-    {
-        #ifdef ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0
-            TCCR0A = (1 << WGM01); // ctc NOT pwm (not safe libs like servo might not work inlcuding pin 5 and 6)  
-            TCCR0B = (1 << CS01) | (1 << CS00);
-  
-            OCR0A = 249; // (250 steps are exactly 1s (machines start at 0 so thats why 249))
-  
-            TIMSK0 |= (1 << OCIE0A);
-        #else
-            TCCR0A = (1 << WGM01) | (1 << WGM00); // fast pwm NOT ctc (safe)
-            TCCR0B = (1 << CS01) | (1 << CS00);   
-        
-            TIMSK0 |= (1 << TOIE0);
-        #endif
-    }
+    void initTimer(void);
 }
 
 #endif

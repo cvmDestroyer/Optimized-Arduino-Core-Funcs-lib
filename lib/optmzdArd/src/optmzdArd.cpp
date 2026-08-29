@@ -18,7 +18,7 @@ namespace ard
 {
     // normal versions
     void pinMode(uint8_t pin, uint8_t func)                            { ::pinMode(pin, func);                                           }
-    void digitalWrite(uint8_t pin, bool HILO)                          { ::digitalWrite(pin, HILO);                                      }
+    void digitalWrite(uint8_t pin, bool val)                           { ::digitalWrite(pin, val);                                      }
     bool digitalRead(uint8_t pin)                                      { bool ret{::digitalRead(pin)};    return ret;                    }
     uint16_t analogRead(uint8_t pin)                                   { uint16_t ret{::analogRead(pin)}; return ret;                    }
     void analogReference(uint8_t mode)                                 { ::analogReference(mode);                                        }
@@ -85,31 +85,29 @@ namespace uno
 
         SREG = oldSREG;
     }
-    void digitalWrite(uint8_t pin, bool HILO)
+    void digitalWrite(uint8_t pin, bool val)
     {
         uint8_t oldSREG = SREG;
         cli();
 
-        if (pin >= 0 && pin <= 7) 
-        { 
-            if (HILO) 
+        if (pin >= 0 && pin <= 7) { 
+            if (val) 
                 PORTD |= (1 << pin);
             else 
                 PORTD &= ~(1 << pin);
-        }
-        else if (pin >= 8 && pin <= 13) 
-        {
-            if (HILO)
+
+        } else if (pin >= 8 && pin <= 13) {
+            if (val)
                 PORTB |= (1 << (pin - 8));
             else
                 PORTB &= ~(1 << (pin - 8));
-        }
-        else if (pin >= 14 && pin <= 19) 
-        {
-            if (HILO)
+
+        } else if (pin >= 14 && pin <= 19) {
+            if (val)
                 PORTB |= (1 << (pin - 14));
             else
                 PORTB &= ~(1 << (pin - 14));
+
         }
         
         SREG = oldSREG;
@@ -404,9 +402,9 @@ namespace uno
     {
         // here we do the other method whith the ISR
         // but its basicly the same thing as 'void tone(uint16_t frequency);'
-        if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); digitalWrite(pin ,_LOW); return; }
+        if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); uno::digitalWrite(pin ,_LOW); return; }
         uno::privat::currentPin = pin;
-        pinMode(pin, _OUTPUT);
+        uno::pinMode(pin, _OUTPUT);
 
         uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
                              (frequency < 976) ? 128  : (frequency < 1953) ? 64 :
@@ -422,9 +420,18 @@ namespace uno
         OCR2A = static_cast<uint8_t>((16000000UL / (2UL * prescaler * frequency)) - 1);
         TIMSK2 |= (1 << OCIE2A);
     }
+    void tone(uint8_t pin, uint16_t frequency, uint32_t duration) {
+        uno::tone(pin, frequency);
+
+        if (duration > 0) 
+            uno::privat::toggleCount = (2UL * frequency * duration) / 1000UL;
+        else 
+            uno::privat::toggleCount = 0;
+
+    }
     void noTone(uint8_t pin) {
         TIMSK2 &= ~(1 << OCIE2A);
-        digitalWrite(currentPin, LOW);
+        uno::digitalWrite(pin, LOW);
     }
 
     // extras
@@ -455,7 +462,7 @@ namespace uno
         DDRD |= (1 << PB3);
         if (frequency < 61) { // our prescaler is too bad for anthing under 61 so we just turn it off
             TIMSK2 &= ~(1 << OCR2A);
-            digitalWrite(3, LOW);
+            PORTD &= ~(1 << 3);
             return;
         }
 
@@ -477,7 +484,22 @@ namespace uno
     }
     void noTone(void) {
         TIMSK2 &= ~(1 << OCR2A);
-        digitalWrite(3, LOW);
+        uno::digitalWrite(3, LOW);
+    }
+    void initTimer(void) {
+        #ifdef ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0
+            TCCR0A = (1 << WGM01); // ctc NOT pwm (not safe libs like servo might not work inlcuding pin 5 and 6)  
+            TCCR0B = (1 << CS01) | (1 << CS00);
+  
+            OCR0A = 249; // (250 steps are exactly 1s (machines start at 0 so thats why 249))
+  
+            TIMSK0 |= (1 << OCIE0A);
+        #else
+            TCCR0A = (1 << WGM01) | (1 << WGM00); // fast pwm NOT ctc (safe)
+            TCCR0B = (1 << CS01) | (1 << CS00);   
+        
+            TIMSK0 |= (1 << TOIE0);
+        #endif
     }
 }
 
