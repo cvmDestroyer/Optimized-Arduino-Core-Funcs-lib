@@ -1,6 +1,6 @@
 // clang-format off
 /*
-  optmzdArd - Fast Register Library for Arduino
+  optmzdArd - fast register Library for Arduino
  
   Copyright (c) 2026 Tim Seiffer - cvmDestroyer
  
@@ -96,12 +96,13 @@ namespace ard // <- done
     template<uint8_t PIN> uint32_t pulseIn(uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(PIN, state, timeout)    };   return ret; }
     template<uint8_t PIN> uint32_t pulseInLong(uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(PIN, state, timeout)};   return ret; }
 
-    template<uint8_t PIN> void tone(uint16_t frequency)                   { ::tone(PIN, frequency);           }
-    template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration){ ::tone(PIN, frequency, duration); }
-    template<uint8_t PIN> void noTone(void)                               { ::noTone(PIN);                    }
+    template<uint8_t PIN> void tone(uint16_t frequency)                    { ::tone(PIN, frequency);           }
+    template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration) { ::tone(PIN, frequency, duration); }
+    template<uint8_t PIN> void noTone(void)                                { ::noTone(PIN);                    }
 
+    inline void initTimer(void) {;} // null statement
     // this is if someone wants to write a lib with optmzdArd.h included
-    // the thought proccess is if someone writes a lib for every chip they might use somting like this:
+    // the thought proccess is if someone writes a lib for every chip they might use something like this:
     // #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
     // namespace gpio = uno;
     // #else
@@ -121,7 +122,7 @@ namespace uno
         extern volatile uint32_t timer0_overflow_count;
     }
     void pinMode(uint8_t pin, uint8_t func);     // <- done
-    void digitalWrite(uint8_t pin, bool HILO);   // <- done
+    void digitalWrite(uint8_t pin, bool val);    // <- done
     bool digitalRead(uint8_t pin);               // <- done
     uint16_t analogRead(uint8_t pin);            // <- done
     void analogReference(uint8_t mode);          // <- done
@@ -132,9 +133,9 @@ namespace uno
     void delay(uint32_t ms);                     // <- done
     void delayMicroseconds(uint16_t us);         // <- done
     uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout);                   // <- done
-    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout);            //
+    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout);               // <- done
     uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout = 1000000L);        // <- done
-    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout = 1000000L); //
+    uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout = 1000000L);    // <- done
     
     void tone(uint8_t pin, uint16_t frequency); // <- done
     void noTone(uint8_t pin);                   // <- done
@@ -179,7 +180,6 @@ namespace uno
                 *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCR_REG) |= hardwearLvl<PIN>::COM_BIT;
             }
         }
-        
     };
 
     // this took me half an hour ✌️🫩

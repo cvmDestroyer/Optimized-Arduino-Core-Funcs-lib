@@ -18,7 +18,7 @@ namespace ard
 {
     // normal versions
     void pinMode(uint8_t pin, uint8_t func)                            { ::pinMode(pin, func);                                           }
-    void digitalWrite(uint8_t pin, bool val)                           { ::digitalWrite(pin, val);                                      }
+    void digitalWrite(uint8_t pin, bool val)                           { ::digitalWrite(pin, val);                                       }
     bool digitalRead(uint8_t pin)                                      { bool ret{::digitalRead(pin)};    return ret;                    }
     uint16_t analogRead(uint8_t pin)                                   { uint16_t ret{::analogRead(pin)}; return ret;                    }
     void analogReference(uint8_t mode)                                 { ::analogReference(mode);                                        }
@@ -30,10 +30,10 @@ namespace ard
     void delayMicroseconds(uint32_t us)                                { ::delayMicroseconds(us);                                        }                   
     uint32_t pulseIn(uint8_t pin, uint8_t state)                       { uint32_t ret{::pulseIn(pin, state, 1000000UL)    }; return ret; }
     uint32_t pulseInLong(uint8_t pin, uint8_t state)                   { uint32_t ret{::pulseInLong(pin, state, 1000000UL)}; return ret; }
-    uint32_t pulseIn(uint8_t pin, uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(pin, state, timeout)    }; return ret;   }
-    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(pin, state, timeout)}; return ret;    }
-    //void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) { ::attachInterrupt(interruptNum, *userFunc, mode);     }
-    //void detachInterrupt(uint8_t interruptNum)                                   { ::detachInterrupt(interruptNum);                      }
+    uint32_t pulseIn(uint8_t pin, uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(pin, state, timeout)    };   return ret; }
+    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(pin, state, timeout)};   return ret; }
+    //void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) { ::attachInterrupt(interruptNum, *userFunc, mode);   }
+    //void detachInterrupt(uint8_t interruptNum)                                   { ::detachInterrupt(interruptNum);                    }
 
     void tone(uint8_t pin, uint16_t frequency)                         { ::tone(pin, frequency);                                         }
     void tone(uint8_t pin, uint16_t frequency, uint32_t duration)      { ::tone(pin, frequency, duration);                               }
