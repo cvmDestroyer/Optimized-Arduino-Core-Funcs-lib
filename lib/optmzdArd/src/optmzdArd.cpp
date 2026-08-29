@@ -5,9 +5,7 @@
 #include <util/delay.h>
 #include "optmzdArd.h"
 // clang-format off
-
 #include <avr/io.h>
-
 
 // THIS HAS HIGH RISK ONLY UNCOMMENT IF YOU KNOW WHAT UR DOING
 // THIS COULD KILL OTHER LIBS if you uncomment '#define ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0'
