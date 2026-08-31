@@ -28,6 +28,8 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+using func_ptr = void (*)();
+
 #if defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
   constexpr uint8_t _DEFAULT           {0};
   constexpr uint8_t _EXTERNAL          {1};
@@ -84,21 +86,24 @@ namespace ard // <- done
     void tone(uint8_t pin, uint16_t frequency, uint32_t duration);
     void noTone(uint8_t pin);
 
+    void attachInterrupt(uint8_t pin, func_ptr userFunc, uint8_t mode);
+    void detachInterrupt(uint8_t pin);                                  
+
     // templates 
     template<uint8_t PIN> void pinMode(uint8_t func)    { ::pinMode(PIN, func);                        }
     template<uint8_t PIN> void digitalWrite(bool val)   { ::digitalWrite(PIN, val);                    }
     template<uint8_t PIN> bool digitalRead(void)        { bool ret{::digitalRead(PIN)};    return ret; }
     template<uint8_t PIN> uint16_t analogRead(void)     { uint16_t ret{::analogRead(PIN)}; return ret; }
     template<uint8_t PIN> void analogWrite(uint8_t val) { ::analogWrite(PIN, val);                     }
-
     template<uint8_t PIN> uint32_t pulseIn(uint8_t state)                       { uint32_t ret{::pulseIn(PIN, state, 1000000UL)    }; return ret; }
     template<uint8_t PIN> uint32_t pulseInLong(uint8_t state)                   { uint32_t ret{::pulseInLong(PIN, state, 1000000UL)}; return ret; }
     template<uint8_t PIN> uint32_t pulseIn(uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(PIN, state, timeout)    };   return ret; }
     template<uint8_t PIN> uint32_t pulseInLong(uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(PIN, state, timeout)};   return ret; }
-
     template<uint8_t PIN> void tone(uint16_t frequency)                    { ::tone(PIN, frequency);           }
     template<uint8_t PIN> void tone(uint16_t frequency, uint32_t duration) { ::tone(PIN, frequency, duration); }
     template<uint8_t PIN> void noTone(void)                                { ::noTone(PIN);                    }
+    template<uint8_t PIN, func_ptr USER_FUNC, uint8_t INT_MODE> void attachInterrupt(void) { ::attachInterrupt(digitalPinToInterrupt(PIN), USER_FUNC, INT_MODE); }
+    template<uint8_t PIN> void detachInterrupt(void)                                       { ::detachInterrupt(digitalPinToInterrupt(PIN));                      }
 
     inline void initTimer(void) {;} // null statement
     // this is if someone wants to write a lib with optmzdArd.h included
@@ -120,6 +125,15 @@ namespace uno
         extern volatile uint32_t timer0_millis;
         extern volatile uint8_t timer0_fract;
         extern volatile uint32_t timer0_overflow_count;
+
+        extern volatile func_ptr callbacks[20] = {nullptr};
+        extern volatile func_ptr int0_func = {nullptr};
+        extern volatile func_ptr int1_func = {nullptr};
+        extern volatile uint8_t modes[20] = {0};
+
+        extern volatile uint8_t last_port_B = 0;
+        extern volatile uint8_t last_port_C = 0;
+        extern volatile uint8_t last_port_D = 0;
     }
     void pinMode(uint8_t pin, uint8_t func);     // <- done
     void digitalWrite(uint8_t pin, bool val);    // <- done
@@ -137,8 +151,12 @@ namespace uno
     uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout = 1000000L);        // <- done
     uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout = 1000000L);    // <- done
     
-    void tone(uint8_t pin, uint16_t frequency); // <- done
-    void noTone(uint8_t pin);                   // <- done
+    void tone(uint8_t pin, uint16_t frequency);                    // <- done
+    void tone(uint8_t pin, uint16_t frequency, uint32_t duration); // <- done
+    void noTone(uint8_t pin);                                      // <- done
+    
+    void attachInterrupt(uint8_t pin, func_ptr userFunc, uint8_t mode); // <- done
+    void detachInterrupt(uint8_t pin);                                  // <- done
 
     // templates ------------------------------------------------------------------------------------------------
     // this just for the template part cool ik :)
@@ -217,7 +235,8 @@ namespace uno
     DEFINE_PIN( 19,  C,   5,   5,  false,    0,        0,             0        )
 
     // templates
-    template<uint8_t PIN> void pinMode(uint8_t func) {
+    template<uint8_t PIN> void pinMode(uint8_t func) 
+    {
         volatile uint8_t* outputReg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::DDR)};
         volatile uint8_t* pullupReg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
@@ -233,7 +252,8 @@ namespace uno
            *pullupReg &= ~mask;
         }
     }
-    template<uint8_t PIN> void digitalWrite(bool val) {
+    template<uint8_t PIN> void digitalWrite(bool val) 
+    {
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
     
@@ -242,13 +262,15 @@ namespace uno
         else
             *reg &= ~mask;
     }
-    template<uint8_t PIN> bool digitalRead(void) {
+    template<uint8_t PIN> bool digitalRead(void) 
+    {
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PIN_REG)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
 
         return (*reg & mask);
     }
-    template<uint8_t PIN> uint16_t analogRead(void) {
+    template<uint8_t PIN> uint16_t analogRead(void) 
+    {
         static_assert(hardwearLvl<PIN>::ADC_CH != 255, "ERROR: analogRead can only read anlog pins PWM DOES NOT COUNT(~pin) onyl A0 - A5");
 
         constexpr uint8_t channel = hardwearLvl<PIN>::ADC_CH;
@@ -262,7 +284,8 @@ namespace uno
     template<uint8_t PIN> void analogWrite(uint8_t val) {
         analogWriteHelper<PIN>::apply(val);
     }
-    template<uint8_t PIN> uint32_t pulseIn(bool state, uint32_t timeout) {
+    template<uint8_t PIN> uint32_t pulseIn(bool state, uint32_t timeout) 
+    {  
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PIN_REG)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
 
@@ -284,7 +307,8 @@ namespace uno
     
         return (pulseCycles * 16) / (F_CPU / 1000000L);
     }
-    template<uint8_t PIN> uint32_t pulseInLong(bool state, uint32_t timeout) {
+    template<uint8_t PIN> uint32_t pulseInLong(bool state, uint32_t timeout) 
+    {
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PIN_REG)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
         
@@ -311,8 +335,10 @@ namespace uno
     template<uint8_t PIN> uint32_t pulseInLong(bool state) {
         return uno::pulseInLong<PIN>(state, 1000000UL);
     }
-    template<uint8_t PIN> void tone(uint16_t frequency) {
+    template<uint8_t PIN> void tone(uint16_t frequency) 
+    {
         if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); digitalWrite<PIN>(_LOW); return; }
+        
         uno::privat::currentPin = PIN;
         uno::pinMode<PIN>(_OUTPUT);
 
@@ -343,7 +369,79 @@ namespace uno
         TIMSK2 &= ~(1 << OCIE2A);
         uno::digitalWrite<PIN>(_LOW);
     }
+    template<uint8_t PIN, func_ptr USER_FUNC, uint8_t INT_MODE> void attachInterrupt(void) 
+    {
+        static_assert(INT_MODE < 4, "ERROR: only 3 modes CHANGE(1), FALLING(2), RISING(3)")
+        uint8_t bit{hardwearLvl<PIN>::BIT};
 
+        if(PIN == 2) 
+        {
+            EICRA &= ~((1 << ISC00) | (1 << ISC01));
+            if (INT_MODE == FALLING) 
+                EICRA |= (1 << ISC01);
+            else if (INT_MODE == RISING) 
+                EICRA |= (1 << ISC01) | (1 << ISC00);
+            else if (INT_MODE == CHANGE) 
+                EICRA |= (1 << ISC00);
+
+            EIFR |= (1 << INTF0);
+            uno::privat::int0_func = USER_FUNC; 
+            EIMSK |= (1 << INT0);
+        }
+        else if(PIN == 3) 
+        {
+            EICRA &= ~((1 << ISC10) | (1 << ISC11));
+            if (INT_MODE == FALLING) 
+                EICRA |= (1 << ISC11);
+            else if (INT_MODE == RISING) 
+                EICRA |= (1 << ISC11) | (1 << ISC10);
+            else if (INT_MODE == CHANGE) 
+                EICRA |= (1 << ISC10);
+
+            EIFR |= (1 << INTF1);
+            uno::privat::int0_func = USER_FUNC;
+            EIMSK |= (1 << INT1);
+        }
+        else if (PIN <= 7)
+        {
+            PCICR |= (1 << PCIE2);
+            PCMSK2 |= (1 << bit);
+            uno::privat::callbacks[PIN] = USER_FUNC;
+            uno::privat::modes[PIN] = INT_MODE;
+            uno::privat::last_port_D = PIND;
+        }
+        else if (PIN >= 8 && PIN <= 13) 
+        {
+            PCICR |= (1 << PCIE0);
+            PCMSK0 |= (1 << bit);
+            uno::privat::callbacks[PIN] = USER_FUNC;
+            uno::privat::modes[PIN] = INT_MODE;
+            uno::privat::last_port_B = PINB;
+        }
+        else if (PIN >= 14 && PIN <= 19) 
+        {
+            PCICR |= (1 << PCIE1);
+            PCMSK1 |= (1 << bit);
+            uno::privat::callbacks[PIN] = USER_FUNC;
+            uno::privat::modes[PIN] = INT_MODE;
+            uno::privat::last_port_C = PINC;
+        }
+    }
+    template <uint8_t PIN> void detachInterrupt(void) 
+    {
+        uint8_t bit{hardwearLvl<PIN>::BIT};
+
+        if (PIN == 2) 
+            EIMSK &= ~(1 << INT0);
+        else if (PIN == 3) 
+            EIMSK &= ~(1 << INT1);
+        else if (PIN <= 7)
+            PCMSK2 &= ~(1 << bit);
+        else if (PIN >= 8 && PIN <= 13)
+            PCMSK0 &= ~(1 << bit);
+        else if (PIN >= 14 && PIN <= 19)
+            PCMSK1 &= ~(1 << bit);
+    }
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance);
     void tone(uint16_t frequency);

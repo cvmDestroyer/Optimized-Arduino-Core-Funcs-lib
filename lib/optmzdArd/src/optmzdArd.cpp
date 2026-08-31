@@ -29,13 +29,14 @@ namespace ard
     uint32_t pulseIn(uint8_t pin, uint8_t state)                       { uint32_t ret{::pulseIn(pin, state, 1000000UL)    }; return ret; }
     uint32_t pulseInLong(uint8_t pin, uint8_t state)                   { uint32_t ret{::pulseInLong(pin, state, 1000000UL)}; return ret; }
     uint32_t pulseIn(uint8_t pin, uint8_t state, uint32_t timeout)     { uint32_t ret{::pulseIn(pin, state, timeout)    };   return ret; }
-    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(pin, state, timeout)};   return ret; }
-    //void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode) { ::attachInterrupt(interruptNum, *userFunc, mode);   }
-    //void detachInterrupt(uint8_t interruptNum)                                   { ::detachInterrupt(interruptNum);                    }
+    uint32_t pulseInLong(uint8_t pin, uint8_t state, uint32_t timeout) { uint32_t ret{::pulseInLong(pin, state, timeout)};   return ret; } 
 
     void tone(uint8_t pin, uint16_t frequency)                         { ::tone(pin, frequency);                                         }
     void tone(uint8_t pin, uint16_t frequency, uint32_t duration)      { ::tone(pin, frequency, duration);                               }
     void noTone(uint8_t pin)                                           { ::noTone(pin);                                                  }
+
+    void attachInterrupt(uint8_t pin, func_ptr userFunc, uint8_t mode) { ::attachInterrupt(digitalPinToInterrupt(pin), userFunc, mode);  }
+    void detachInterrupt(uint8_t pin)                                  { ::detachInterrupt(pin);                                         }
 }
 
 namespace uno
@@ -47,6 +48,15 @@ namespace uno
         volatile uint32_t timer0_millis = 0;
         volatile uint8_t timer0_fract = 0;
         volatile uint32_t timer0_overflow_count = 0;
+        
+        volatile func_ptr callbacks[20] = {nullptr};
+        volatile func_ptr int0_func = {nullptr};
+        volatile func_ptr int1_func = {nullptr};
+        volatile uint8_t modes[20] = {0};
+
+        volatile uint8_t last_port_B = 0;
+        volatile uint8_t last_port_C = 0;
+        volatile uint8_t last_port_D = 0;
     }
     void pinMode(uint8_t pin, uint8_t func)
     {
@@ -431,7 +441,70 @@ namespace uno
         TIMSK2 &= ~(1 << OCIE2A);
         uno::digitalWrite(pin, LOW);
     }
-
+    void attachInterrupt(uint8_t pin, func_ptr userFunc, uint8_t mode) 
+    {
+        if(pin == 2) 
+        {
+            EICRA &= ~(1 << ISC00) | (1 << ISC01);
+            if (mode == FALLING) 
+                EICRA |= (1 << ISC01);
+            else if (mode == RISING) 
+                EICRA |= (1 << ISC01) | (1 << ISC00);
+            else if (mode == CHANGE) 
+                EICRA |= (1 << ISC00);
+            uno::privat::int0_func = userFunc; 
+            EIMSK |= (1 << INT0);
+        }
+        else if(pin == 3) 
+        {
+            EICRA &= ~(1 << ISC10) | (1 << ISC11);
+            if (mode == FALLING) 
+                EICRA |= (1 << ISC11);
+            else if (mode == RISING) 
+                EICRA |= (1 << ISC11) | (1 << ISC10);
+            else if (mode == CHANGE) 
+                EICRA |= (1 << ISC10);
+            uno::privat::int0_func = userFunc;
+            EIMSK |= (1 << INT1);
+        }
+        else if (pin <= 7)
+        {
+            PCICR |= (1 << PCIE2);
+            PCMSK2 |= (1 << pin);
+            uno::privat::callbacks[pin] = userFunc;
+            uno::privat::modes[pin] = mode;
+            uno::privat::last_port_D = PIND;
+        }
+        else if (pin >= 8 && pin <= 13) 
+        {
+            PCICR |= (1 << PCIE0);
+            PCMSK0 |= (1 << (pin - 8));
+            uno::privat::callbacks[pin] = userFunc;
+            uno::privat::modes[pin] = mode;
+            uno::privat::last_port_B = PINB;
+        }
+        else if (pin >= 14 && pin <= 19) 
+        {
+            PCICR |= (1 << PCIE1);
+            PCMSK1 |= (1 << (pin - 14));
+            uno::privat::callbacks[pin] = userFunc;
+            uno::privat::modes[pin] = mode;
+            uno::privat::last_port_C = PINC;
+        }
+    }
+    void detachInterrupt(uint8_t pin) 
+    {
+        if (pin == 2) 
+            EIMSK &= ~(1 << INT0);
+        else if (pin == 3) 
+            EIMSK &= ~(1 << INT1);
+        else if (pin <= 7)
+            PCMSK2 &= ~(1 << pin);
+        else if (pin >= 8 && pin <= 13)
+            PCMSK0 &= ~(1 << (pin - 8));
+        else if (pin >= 14 && pin <= 19)
+            PCMSK1 &= ~(1 << (pin - 14));
+    }
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance)
     {
@@ -538,3 +611,76 @@ ISR(TIMER2_COMPA_vect) {
     }
 #endif
 
+ISR(PCINT0_vect) {
+    uint8_t current = PINB;
+    // XOR zeigt nur die Bits an, die sich verändert haben
+    uint8_t changed = current ^ uno::privat::last_port_B;
+    uno::privat::last_port_B = current;
+
+    for (uint8_t bit = 0; bit < 6; bit++) {
+        if (changed & (1 << bit)) {
+            uint8_t pin = bit + 8;
+            func_ptr cb = uno::privat::callbacks[pin];
+            if (!cb) continue;
+
+            uint8_t mode = uno::privat::modes[pin];
+            bool pinState = (current & (1 << bit));
+
+            if (mode == CHANGE || 
+               (mode == RISING && pinState) || 
+               (mode == FALLING && !pinState)) {
+                cb();
+            }
+        }
+    }
+}
+ISR(PCINT2_vect) {
+    uint8_t current = PIND;
+    uint8_t changed = current ^ uno::privat::last_port_D;
+    uno::privat::last_port_D = current;
+
+    for (uint8_t bit = 0; bit < 8; bit++) { // 8 Pins (0 bis 7)
+        if (changed & (1 << bit)) {
+            uint8_t pin = bit; // Pin 0..7
+            func_ptr cb = uno::privat::callbacks[pin];
+            if (!cb) continue;
+
+            uint8_t mode = uno::privat::modes[pin];
+            bool pinState = (current & (1 << bit));
+
+            if (mode == CHANGE || 
+               (mode == RISING && pinState) || 
+               (mode == FALLING && !pinState)) {
+                cb();
+            }
+        }
+    }
+}
+ISR(PCINT1_vect) {
+    uint8_t current = PINC;
+    uint8_t changed = current ^ uno::privat::last_port_C;
+    uno::privat::last_port_C = current;
+
+    for (uint8_t bit = 0; bit < 6; bit++) {
+        if (changed & (1 << bit)) {
+            uint8_t pin = bit + 14;
+            func_ptr cb = uno::privat::callbacks[pin];
+            if (!cb) continue;
+
+            uint8_t mode = uno::privat::modes[pin];
+            bool pinState = (current & (1 << bit));
+
+            if (mode == CHANGE || 
+               (mode == RISING && pinState) || 
+               (mode == FALLING && !pinState)) {
+                cb();
+            }
+        }
+    }
+}
+ISR(INT0_vect) {
+    uno::privat::int0_func();
+}
+ISR(INT1_vect) {
+    uno::privat::int1_func();
+}
