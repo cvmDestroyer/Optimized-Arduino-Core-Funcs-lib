@@ -1,135 +1,142 @@
 #include <Arduino.h>
 
-this file is a explaination file and is not needed for the optmzdArd lib delete at your will
-sorry if there are some grammatical mistakes im not good with languages not even in my mother-langueage (german)
-i make many easy mistakes but just so you know i've tried my best
-'
-there are 3 timer in the ATmega328P: timer0 timer1 and timer2. timer1 is used by the Servo lib
-so we wont use that timer even though its the only 16bit timer the rest are 8bit timers.
-timer0 is for millis() delay() micros() delayMicroseconds() 
-therefore we will use timer 0 for ourer millis() delay() and so on.
-timer2 is for things like for example tone() so it doesnt block the whole programm after
-calling it. in this little explanation file i explain the registers you need
-so you can know whats under the hood and how everything works.
-
-first of all we need to know some registers and what they do
-
-first there are the prescaler
-what do are they for? - well they do one main point as you may know the Arduino Unos clock speed is 
-16 Mhz and thats just too fast for most things like leds servos motores and so on but you can slow
-it down if you use a presacler here are the diffrent prescaler: (us is micro seconds just so you know)
-
-prescaler   |   clock-speeds   |  time to countstep   |   overflow-freqency (8bit)
-----------------------------------------------------------------------------------
-   1        |    16     MHz    |      0.0625 us       |           62.5   kHz
-   8        |    2      MHz    |      0.5    us       |           7.81   kHz
-   32       |    500    khz    |      2      us       |           1.95   kHz
-   64       |    250    kHz    |      4      us       |           976.5  Hz
-   128      |    125    khz    |      8      us       |           488.3  Hz
-   256      |    62.5   kHz    |      16     us       |           244.1  Hz
-   1024     |    15.625 kHz    |      64     us       |           61.0   Hz
-
-okay now you know the prescaler and what they do but how do you activate them?
-there is a register for that called Clock Select(CS) but there is a catch for timer 0 and 1
-the bit combinations mean diffrent things so i will give you two tabels one for timer 0/1 and one
-for timer 2
-
-timer 2:
-  CS22 |  CS21 |  CS20 | precaler | aditional info 
-----------------------------------|----------------
-   0   |   0   |   0   |    -     |  TIMER-STOPS   
-   0   |   0   |   1   |    1     |     normal        
-   0   |   1   |   0   |    8     |     normal        
-   0   |   1   |   1   |    32    |     normal
-   1   |   0   |   0   |    64    |     normal        
-   1   |   0   |   1   |   128    |     normal
-   1   |   1   |   0   |   256    |     normal        
-   1   |   1   |   1   |   1024   |     normal        
-
-timer 0/timer 1 (the 0 behind CS has to change to 1 if it is used for timer 1)
-  CS02 |  CS01 |  CS00 | precaler |             aditional info 
-----------------------------------|--------------------------------------
-   0   |   0   |   0   |    -     |              TIMER-STOPS   
-   0   |   0   |   1   |    1     |                normal        
-   0   |   1   |   0   |    8     |                normal        
-   0   |   1   |   1   |    64    |                normal
-   1   |   0   |   0   |   256    |                normal        
-   1   |   0   |   1   |   1024   |                normal
-   1   |   1   |   0   |    -     |  extern clock on pin TO/T1 FALLING        
-   1   |   1   |   1   |    -     |  extern clock on pin TO/T1 RISING
-
-as you have noticed this CSxbit is not a register but a makro for bits now we come to the actual
-register TCCRxB where you activate the prescalers thats about it here is a example for a prescaler of 64 on timer 0
-
-TCCR0B = 0; // all bits reset so we can controll them our self
-TCCR0B |= (1 << CS00) | (1 << CS01); // bits 0 and 1 set to 1
-
-TCCRxA is the other register we need to select the mode the timer has to run on here is another tabel
-(im sorry i know this seems like much but remeber you dont need to memorize these you can look it up for example in this file
-i dont know these out of my head either i too look it up and write it down(this file))
-
-timer 0 (8bit) and timer 2 (8bit):
- WGMx2 (TCCRxB) | WGMx1 (TCCRxA) | WGMx0(TCCRxA) |           mode            | highest-count | describtion
-----------------|----------------|---------------|---------------------------|---------------|---------------------------------------
-        0       |        0       |       0       | normal                    |      255      | standard counter 0 - 255
-        0       |        0       |       1       | PWM, phase correct        |      255      | counts up and down(symetric impulses)
-        0       |        1       |       0       | ctc                       |     OCRxA     | counts to the limit set by OCRxA then jumps to 0
-        0       |        1       |       1       | fast PWM (8bit)           |      255      | standard 8bit PWM
-        1       |        0       |       0       | reserved                  |       -       | do not use
-        1       |        0       |       1       | PWM, phase & freq correct |     OCRxA     | freqeny can be controlled by OCRxA
-        1       |        1       |       0       | reserved                  |       -       | do not use
-        1       |        1       |       1       | fast PWM (var)            |     OCRxA     | freqeny can be controlled by OCRxA
-
-timer 1 (16bit):
- WGM13 (TCCR1B) | WGM12 (TCCR1B) | WGM11 (TCCR1A) | WGM10(TCCR1A) |            mode            | highest-count 
-----------------|----------------|----------------|---------------|----------------------------|---------------
-        0       |        0       |        0       |       0       | normal                     |     65535     
-        0       |        0       |        0       |       1       | PWM, phase correct (8bit)  |     255      
-        0       |        0       |        1       |       0       | PWM, phase correct (9bit)  |     511      
-        0       |        0       |        1       |       1       | PWM, phase correct (10bit) |     1023     
-        0       |        1       |        0       |       0       | ctc                        |     OCR1A     
-        0       |        1       |        0       |       1       | fast PWM (8bit)            |     255      
-        0       |        1       |        1       |       0       | fast PWM (9bit)            |     511      
-        0       |        1       |        1       |       1       | fast PWM (10bit)           |     1023     
-        1       |        0       |        0       |       0       | PWM, phase & freq correct  |     ICR1     
-        1       |        0       |        0       |       1       | PWM, phase & freq correct  |     OCR1A     
-        1       |        0       |        1       |       0       | PWM, phase correct         |     ICR1     
-        1       |        0       |        1       |       1       | PWM, phase correct         |     OCR1A     
-        1       |        1       |        0       |       0       | ctc                        |     ICR1      
-        1       |        1       |        0       |       1       | reserved                   |       -       
-        1       |        1       |        1       |       0       | fast PWM (var)             |     ICR1     
-        1       |        1       |        1       |       1       | fast PWM (var)             |     OCR1A     
-
-alright this took longer than expected but now that thats out of the way we can finaly activate an interrupt
-with TIMSKx here i again made a tabel because its the easierst way to explain a little bit below i also will
-give you an example so you can know how to use it
-
-bits in TIMSKx           | when does an interrupt fire?            | ISR makro         
--------------------------|-----------------------------------------|-------------------
-TOIE0 / TOIE1 / TOIE2    | when counter overflows 255 -> 0 (8bit)  | TIMERx_OVF_vect   
--------------------------|-----------------------------------------|-------------------
-OCIE0A / OCIE1A / OCIE2A | when counter TCNTx is the same as OCRxA | TIMERx_COMPA_vect 
--------------------------|-----------------------------------------|-------------------
-OCIE0B / OCIE1B / OCIE2B | when counter TCNTx is the same as OCRxB | TIMERx_COMPB_vect 
--------------------------|-----------------------------------------|-------------------
-ICIE1 (only timer 1)     | when a signal edge is detected on the   | TIMER1_CAPT_vect  
-                         | ICP1 pin (pin8) or by the anlog         |
-                         | comparator, the counter value (TCNT1)   |
-                         | is immediately captured in ICR1.        |
-            
-here a lil example how it works:
+// IF THIS IS YOUR FIRST EXPLAINATION FILE YOUR IN THE WRONG PLACE THIS IS EXPLAINATION FILE NUMBER 3
+// if you wanna learn more this is the road map start at portsUno
+// portsUno -> analogUno -> timerUno -> interruptsUno
+//
+// this file is a explaination file and is not needed for the optmzdArd lib delete at your will
+// sorry if there are some grammatical mistakes im not good with languages not even in my mother-langueage (german)
+// i make many easy mistakes but just so you know i've tried my best
+// '
+// there are 3 timer in the ATmega328P: timer0 timer1 and timer2. timer1 is used by the Servo lib
+// so we wont use that timer even though its the only 16bit timer the rest are 8bit timers.
+// timer0 is for millis() delay() micros() delayMicroseconds()
+// therefore we will use timer 0 for ourer millis() delay() and so on.
+// timer2 is for things like for example tone() so it doesnt block the whole programm after
+// calling it. in this little explanation file i explain the registers you need
+// so you can know whats under the hood and how everything works.
+//
+// first of all we need to know some registers and what they do
+//
+// first there are the prescaler
+// what do are they for? - well they do one main point as you may know the Arduino Unos clock speed is
+// 16 Mhz and thats just too fast for most things like leds servos motores and so on but you can slow
+// it down if you use a presacler here are the diffrent prescaler: (us is micro seconds just so you know)
+//
+// prescaler   |   clock-speeds   |  time to countstep   |   overflow-freqency (8bit)
+// ----------------------------------------------------------------------------------
+//    1        |    16     MHz    |      0.0625 us       |           62.5   kHz
+//    8        |    2      MHz    |      0.5    us       |           7.81   kHz
+//    32       |    500    khz    |      2      us       |           1.95   kHz
+//    64       |    250    kHz    |      4      us       |           976.5  Hz
+//    128      |    125    khz    |      8      us       |           488.3  Hz
+//    256      |    62.5   kHz    |      16     us       |           244.1  Hz
+//    1024     |    15.625 kHz    |      64     us       |           61.0   Hz
+//
+// okay now you know the prescaler and what they do but how do you activate them?
+// there is a register for that called Clock Select(CS) but there is a catch for timer 0 and 1
+// the bit combinations mean diffrent things so i will give you two tabels one for timer 0/1 and one
+// for timer 2
+//
+// timer 2:
+//   CS22 |  CS21 |  CS20 | precaler | aditional info
+// ----------------------------------|----------------
+//    0   |   0   |   0   |    -     |  TIMER-STOPS
+//    0   |   0   |   1   |    1     |     normal
+//    0   |   1   |   0   |    8     |     normal
+//    0   |   1   |   1   |    32    |     normal
+//    1   |   0   |   0   |    64    |     normal
+//    1   |   0   |   1   |   128    |     normal
+//    1   |   1   |   0   |   256    |     normal
+//    1   |   1   |   1   |   1024   |     normal
+//
+// timer 0/timer 1 (the 0 behind CS has to change to 1 if it is used for timer 1)
+//   CS02 |  CS01 |  CS00 | precaler |             aditional info
+// ----------------------------------|--------------------------------------
+//    0   |   0   |   0   |    -     |              TIMER-STOPS
+//    0   |   0   |   1   |    1     |                normal
+//    0   |   1   |   0   |    8     |                normal
+//    0   |   1   |   1   |    64    |                normal
+//    1   |   0   |   0   |   256    |                normal
+//    1   |   0   |   1   |   1024   |                normal
+//    1   |   1   |   0   |    -     |  extern clock on pin TO/T1 FALLING
+//    1   |   1   |   1   |    -     |  extern clock on pin TO/T1 RISING
+//
+// as you have noticed this CSxbit is not a register but a makro for bits now we come to the actual
+// register TCCRxB where you activate the prescalers thats about it here is a example for a prescaler of 64 on timer 0
 void example()
 {
-    TCCR0A |= (1 << WGM01) | (1 << WGM00); // select a mode in this case it is fast PWM
-    TCCR0B |= (1 << CS01) | (1 << CS00);   // prescaler for normal things just use 64
 
-    TIMSK0 |= (1 << TOIE0); // when iterrupt should fire
+   TCCR0B = 0;                          // all bits reset so we can controll them our self
+   TCCR0B |= (1 << CS00) | (1 << CS01); // bits 0 and 1 set to 1
+}
+// TCCRxA is the other register we need to select the mode the timer has to run on here is another tabel
+// (im sorry i know this seems like much but remeber you dont need to memorize these you can look it up for example in this file
+// i dont know these out of my head either i too look it up and write it down(this file))
+//
+// timer 0 (8bit) and timer 2 (8bit):
+//  WGMx2 (TCCRxB) | WGMx1 (TCCRxA) | WGMx0(TCCRxA) |           mode            | highest-count | describtion
+// ----------------|----------------|---------------|---------------------------|---------------|---------------------------------------
+//         0       |        0       |       0       | normal                    |      255      | standard counter 0 - 255
+//         0       |        0       |       1       | PWM, phase correct        |      255      | counts up and down(symetric impulses)
+//         0       |        1       |       0       | ctc                       |     OCRxA     | counts to the limit set by OCRxA then jumps to 0
+//         0       |        1       |       1       | fast PWM (8bit)           |      255      | standard 8bit PWM
+//         1       |        0       |       0       | reserved                  |       -       | do not use
+//         1       |        0       |       1       | PWM, phase & freq correct |     OCRxA     | freqeny can be controlled by OCRxA
+//         1       |        1       |       0       | reserved                  |       -       | do not use
+//         1       |        1       |       1       | fast PWM (var)            |     OCRxA     | freqeny can be controlled by OCRxA
+//
+// timer 1 (16bit):
+//  WGM13 (TCCR1B) | WGM12 (TCCR1B) | WGM11 (TCCR1A) | WGM10(TCCR1A) |            mode            | highest-count
+// ----------------|----------------|----------------|---------------|----------------------------|---------------
+//         0       |        0       |        0       |       0       | normal                     |     65535
+//         0       |        0       |        0       |       1       | PWM, phase correct (8bit)  |     255
+//         0       |        0       |        1       |       0       | PWM, phase correct (9bit)  |     511
+//         0       |        0       |        1       |       1       | PWM, phase correct (10bit) |     1023
+//         0       |        1       |        0       |       0       | ctc                        |     OCR1A
+//         0       |        1       |        0       |       1       | fast PWM (8bit)            |     255
+//         0       |        1       |        1       |       0       | fast PWM (9bit)            |     511
+//         0       |        1       |        1       |       1       | fast PWM (10bit)           |     1023
+//         1       |        0       |        0       |       0       | PWM, phase & freq correct  |     ICR1
+//         1       |        0       |        0       |       1       | PWM, phase & freq correct  |     OCR1A
+//         1       |        0       |        1       |       0       | PWM, phase correct         |     ICR1
+//         1       |        0       |        1       |       1       | PWM, phase correct         |     OCR1A
+//         1       |        1       |        0       |       0       | ctc                        |     ICR1
+//         1       |        1       |        0       |       1       | reserved                   |       -
+//         1       |        1       |        1       |       0       | fast PWM (var)             |     ICR1
+//         1       |        1       |        1       |       1       | fast PWM (var)             |     OCR1A
+//
+// alright this took longer than expected but now that thats out of the way we can finaly activate an interrupt
+// with TIMSKx here i again made a tabel because its the easierst way to explain a little bit below i also will
+// give you an example so you can know how to use it
+//
+// bits in TIMSKx           | when does an interrupt fire?            | ISR makro
+// -------------------------|-----------------------------------------|-------------------
+// TOIE0 / TOIE1 / TOIE2    | when counter overflows 255 -> 0 (8bit)  | TIMERx_OVF_vect
+// -------------------------|-----------------------------------------|-------------------
+// OCIE0A / OCIE1A / OCIE2A | when counter TCNTx is the same as OCRxA | TIMERx_COMPA_vect
+// -------------------------|-----------------------------------------|-------------------
+// OCIE0B / OCIE1B / OCIE2B | when counter TCNTx is the same as OCRxB | TIMERx_COMPB_vect
+// -------------------------|-----------------------------------------|-------------------
+// ICIE1 (only timer 1)     | when a signal edge is detected on the   | TIMER1_CAPT_vect
+//                          | ICP1 pin (pin8) or by the anlog         |
+//                          | comparator, the counter value (TCNT1)   |
+//                          | is immediately captured in ICR1.        |
+//
+// here a lil example how it works:
+void example()
+{
+   TCCR0A |= (1 << WGM01) | (1 << WGM00); // select a mode in this case it is fast PWM
+   TCCR0B |= (1 << CS01) | (1 << CS00);   // prescaler for normal things just use 64
+
+   TIMSK0 |= (1 << TOIE0); // when iterrupt should fire
 }
 ISR(TIMER0_OVF_vect) // vector for TOIE0
 {
-    something();
-    /* CODE */
+   Serial.print("this does something");
+   /* CODE */
 }
 
-if you want to see the whole thing just take a look in the optmzdArd files
-there you can see how i use these registers and understand how they work thanks for reading :)
+// if you want to see the whole thing just take a look in the optmzdArd files
+// there you can see how i use these registers and understand how they work thanks for reading
+// happy coding :)
