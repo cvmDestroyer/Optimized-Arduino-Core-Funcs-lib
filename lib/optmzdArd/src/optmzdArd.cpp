@@ -60,7 +60,7 @@ namespace uno
     }
     void pinMode(uint8_t pin, uint8_t func)
     {
-        uint8_t oldSREG = SREG;
+        uint8_t oldSREG{SREG};
         cli();
 
         if (pin >= 0 && pin <= 7) 
@@ -78,16 +78,28 @@ namespace uno
         }
         else if (pin >= 8 && pin <= 13) 
         {
-            uint8_t bit = pin - 8;
             if (func == _OUTPUT) {
-                DDRB |= (1 << bit);
-                PORTB &= ~(1 << bit);
+                DDRB |= (1 << (pin - 8));
+                PORTB &= ~(1 << (pin - 8));
             } else if (func == _INPUT) {
-                DDRB &= ~(1 << bit);
-                PORTB &= ~(1 << bit);
+                DDRB &= ~(1 << (pin - 8));
+                PORTB &= ~(1 << (pin - 8));
             } else if (func == _INPUT_PULLUP) {
-                DDRB &= ~(1 << bit);
-                PORTB |= (1 << bit);
+                DDRB &= ~(1 << (pin - 8));
+                PORTB |= (1 << (pin - 8));
+            }
+        }
+        else if (pin >= 14 && pin <= 19) 
+        {
+            if (func == _OUTPUT) {
+                DDRC |= (1 << (pin - 14));
+                PORTC &= ~(1 << (pin - 14));
+            } else if (func == _INPUT) {
+                DDRC &= ~(1 << (pin - 14));
+                PORTC &= ~(1 << (pin - 14));
+            } else if (func == _INPUT_PULLUP) {
+                DDRC &= ~(1 << (pin - 14));
+                PORTC |= (1 << (pin - 14));
             }
         }
 
@@ -95,7 +107,7 @@ namespace uno
     }
     void digitalWrite(uint8_t pin, bool val)
     {
-        uint8_t oldSREG = SREG;
+        uint8_t oldSREG{SREG};
         cli();
 
         if (pin >= 0 && pin <= 7) { 
@@ -135,6 +147,9 @@ namespace uno
     }
     uint16_t analogRead(uint8_t pin)
     {
+        uint8_t oldSREG{SREG};
+        cli();
+
         if (pin >= 14)
             pin -= 14;
         
@@ -147,6 +162,7 @@ namespace uno
         while (ADCSRA & (1 << ADSC))
             ;
 
+        SREG = oldSREG;
         return ADC;
     }
     void analogReference(uint8_t mode)
@@ -246,7 +262,7 @@ namespace uno
     }
 
     uint32_t millis() {
-        uint8_t oldSREG = SREG;
+        uint8_t oldSREG{SREG};
         cli();
         uint32_t ms{uno::privat::timer0_millis};
         SREG = oldSREG;
@@ -309,7 +325,10 @@ namespace uno
     }
     uint32_t pulseIn(uint8_t pin, bool state, uint32_t timeout)
     {
-        if (pin > 7 && pin < 14)
+        uint8_t oldSREG{SREG};
+        cli();
+
+        if (pin >= 8 && pin <= 13)
         {
             uint8_t bit = (1 << (pin - 8));
             uint8_t stateMask = state ? bit : 0;
@@ -318,24 +337,25 @@ namespace uno
             uint32_t maxCycles = timeout * (F_CPU / 1000000L) / 16;
             
             while ((PINB & bit) == stateMask) {      // waiting for the unfinished pusle to finish so we can start with a new pulse
-                if (cycles++ >= maxCycles) return 0; // other wise our calculated result might not be what the user wanted
+                if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}; // other wise our calculated result might not be what the user wanted
             }
             
             while ((PINB & bit) != stateMask) { // now we can wait for the new pulse
-                if (cycles++ >= maxCycles) return 0;
+                if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;};
             }
         
             // and now we can calculate the pulseCycles NOT US
             uint32_t pulseCycles = 0;
             while ((PINB & bit) == stateMask) {
-                if (pulseCycles++ >= maxCycles) return 0;
+                if (pulseCycles++ >= maxCycles) {SREG = oldSREG; return 0;};
             }
         
             // here we calc the micros it is made prossible by looking at how 
             // many clock cycles the asm needs for one loop needs
+            SREG = oldSREG;
             return (pulseCycles * 16) / (F_CPU / 1000000L);
         } 
-        else if (pin >= 0 && pin < 8) 
+        else if (pin >= 0 && pin <= 7) 
         {
             uint8_t bit = (1 << pin);
             uint8_t stateMask = state ? bit : 0;
@@ -345,23 +365,51 @@ namespace uno
             uint32_t maxCycles = timeout * (F_CPU / 1000000L) / 16;
 
             while ((PIND & bit) == stateMask) {
-                if (cycles++ >= maxCycles) return 0;
+                if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
             } 
             while ((PIND & bit) != stateMask) {
-                if (cycles++ >= maxCycles) return 0;
+                if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
             }
 
             uint32_t pulseCycles = 0;
             while ((PIND & bit) == stateMask) {
-                if (pulseCycles++ >= maxCycles) return 0;
+                if (pulseCycles++ >= maxCycles) {SREG = oldSREG; return 0;}
             }
 
+            SREG = oldSREG;
+            return (pulseCycles * 16) / (F_CPU / 1000000L);
+        }
+        else if (pin >= 14 && pin <= 19) 
+        {
+            uint8_t bit = (1 << pin);
+            uint8_t stateMask = state ? bit : 0;
+            
+            uint32_t cycles = 0;
+            
+            uint32_t maxCycles = timeout * (F_CPU / 1000000L) / 16;
+
+            while ((PINC & bit) == stateMask) {
+                if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
+            } 
+            while ((PINC & bit) != stateMask) {
+                if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
+            }
+
+            uint32_t pulseCycles = 0;
+            while ((PINC & bit) == stateMask) {
+                if (pulseCycles++ >= maxCycles) {SREG = oldSREG; return 0;}
+            }
+
+            SREG = oldSREG;
             return (pulseCycles * 16) / (F_CPU / 1000000L);
         }
     }
     uint32_t pulseInLong(uint8_t pin, bool state, uint32_t timeout) 
     {
-        if (pin > 7 && pin < 14) 
+        uint8_t oldSREG{SREG};
+        cli();
+
+        if (pin >= 8 && pin <= 13) 
         {
             uint8_t bit = (1 << (pin - 8));
             uint8_t stateMask = state ? bit : 0;
@@ -369,39 +417,63 @@ namespace uno
             const uint32_t startMicros = uno::micros();
 
             while ((PINB & bit) == stateMask) {
-                if (uno::micros() - startMicros >= timeout) return 0;
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
             }
             while ((PINB & bit) != stateMask) {
-                if (uno::micros() - startMicros >= timeout) return 0;
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
             }
 
             const uint32_t pulseStart = uno::micros();
 
             while ((PINB & bit) == stateMask) {
-                if (uno::micros() - startMicros >= timeout) return 0;
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
             }
 
+            SREG = oldSREG;
             return uno::micros() - pulseStart; 
         } 
-        else if (pin >= 0 && pin < 8) 
+        else if (pin >= 0 && pin <= 7) 
         {
             uint8_t bit = (1 << pin);
             uint8_t stateMask = state ? bit : 0;
             const uint32_t startMicros = uno::micros();
 
             while ((PIND & bit) == stateMask) {
-                if (uno::micros() - startMicros >= timeout) return 0;
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
             }
             while ((PIND & bit) != stateMask) {
-                if (uno::micros() - startMicros >= timeout) return 0;
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
             }
 
             const uint32_t pulseStart = uno::micros();
 
             while ((PIND & bit) == stateMask) {
-                if (uno::micros() - startMicros >= timeout) return 0;
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
             }
 
+            SREG = oldSREG;
+            return uno::micros() - pulseStart; 
+        }
+        else if (pin <= 14 && pin >= 19) 
+        {
+            uint8_t bit = (1 << pin);
+            uint8_t stateMask = state ? bit : 0;
+            const uint32_t startMicros = uno::micros();
+
+            while ((PINC & bit) == stateMask) {
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
+            }
+            while ((PINC & bit) != stateMask) {
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
+            }
+
+            const uint32_t pulseStart = uno::micros();
+
+            while ((PINC & bit) == stateMask) {
+                if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
+            }
+
+            SREG = oldSREG;
             return uno::micros() - pulseStart; 
         }
     }
@@ -443,6 +515,9 @@ namespace uno
     }
     void attachInterrupt(uint8_t pin, func_ptr userFunc, uint8_t mode) 
     {
+        uint8_t oldSREG{SREG};
+        cli();
+
         if(pin == 2) 
         {
             EICRA &= ~(1 << ISC00) | (1 << ISC01);
@@ -491,9 +566,13 @@ namespace uno
             uno::privat::modes[pin] = mode;
             uno::privat::last_port_C = PINC;
         }
+        SREG = oldSREG;
     }
     void detachInterrupt(uint8_t pin) 
     {
+        uint8_t oldSREG{SREG};
+        cli();
+        
         if (pin == 2) 
             EIMSK &= ~(1 << INT0);
         else if (pin == 3) 
@@ -504,10 +583,14 @@ namespace uno
             PCMSK0 &= ~(1 << (pin - 8));
         else if (pin >= 14 && pin <= 19)
             PCMSK1 &= ~(1 << (pin - 14));
+        SREG = oldSREG;
     }
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance)
     {
+        uint8_t oldSREG{SREG};
+        cli();
+
         ADCSRA |= (1 << ADPS2);
         ADCSRA &= ~(1 << ADPS1);
         ADCSRA &= ~(1 << ADPS0);
@@ -519,6 +602,7 @@ namespace uno
         while (ADCSRA & (1 << ADSC))
             ;
 
+        SREG = oldSREG;
         return ADC;
     }
     void tone(uint16_t frequency)
@@ -559,17 +643,23 @@ namespace uno
     }
     void initTimer(void) {
         #ifdef ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0
+            uint8_t oldSREG{SREG};
+            cli();
             TCCR0A = (1 << WGM01); // ctc NOT pwm (not safe libs like servo might not work inlcuding pin 5 and 6)  
             TCCR0B = (1 << CS01) | (1 << CS00);
   
             OCR0A = 249; // (250 steps are exactly 1s (machines start at 0 so thats why 249))
   
             TIMSK0 |= (1 << OCIE0A);
+            SREG = oldSREG;
         #else
+            uint8_t oldSREG{SREG};
+            cli();
             TCCR0A = (1 << WGM01) | (1 << WGM00); // fast pwm NOT ctc (safe)
             TCCR0B = (1 << CS01) | (1 << CS00);   
         
             TIMSK0 |= (1 << TOIE0);
+            SREG = oldSREG;
         #endif
     }
 }

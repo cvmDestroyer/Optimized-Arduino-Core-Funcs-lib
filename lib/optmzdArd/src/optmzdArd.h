@@ -237,6 +237,9 @@ namespace uno
     // templates
     template<uint8_t PIN> void pinMode(uint8_t func) 
     {
+        uint8_t oldSREG{SREG};
+        cli();
+
         volatile uint8_t* outputReg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::DDR)};
         volatile uint8_t* pullupReg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
@@ -251,9 +254,14 @@ namespace uno
            *outputReg &= ~mask;
            *pullupReg &= ~mask;
         }
+
+        SREG = oldSREG;
     }
     template<uint8_t PIN> void digitalWrite(bool val) 
     {
+        uint8_t oldSREG{SREG};
+        cli();
+
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PORT)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
     
@@ -261,6 +269,8 @@ namespace uno
             *reg |= mask;
         else
             *reg &= ~mask;
+
+        SREG = oldSREG;
     }
     template<uint8_t PIN> bool digitalRead(void) 
     {
@@ -286,6 +296,8 @@ namespace uno
     }
     template<uint8_t PIN> uint32_t pulseIn(bool state, uint32_t timeout) 
     {  
+        uint8_t oldSREG{SREG};
+        cli();
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PIN_REG)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
 
@@ -294,39 +306,43 @@ namespace uno
         uint32_t maxCycles = timeout * (F_CPU / 1000000L) / 16;
 
         while ((*reg & mask) == (state ? mask : 0)) {
-            if (cycles++ >= maxCycles) return 0;
+            if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
         } 
         while ((*reg & mask) == (state ? mask : 0)) {
-            if (cycles++ >= maxCycles) return 0;
+            if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
         }
     
         uint32_t pulseCycles = 0;
         while ((*reg & mask) == (state ? mask : 0)) {
-            if (pulseCycles++ >= maxCycles) return 0;
+            if (pulseCycles++ >= maxCycles) {SREG = oldSREG; return 0;}
         }
     
+        SREG = oldSREG;
         return (pulseCycles * 16) / (F_CPU / 1000000L);
     }
     template<uint8_t PIN> uint32_t pulseInLong(bool state, uint32_t timeout) 
     {
+        uint8_t oldSREG{SREG};
+        cli();
         volatile uint8_t* reg{reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PIN_REG)};
         constexpr uint8_t mask{(1 << hardwearLvl<PIN>::BIT)};
         
         const uint32_t startMicros = uno::micros();
 
         while ((*reg & mask) == (state ? mask : 0)) {
-            if (uno::micros() - startMicros >= timeout) return 0;
+            if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
         }
         while ((*reg & mask) != (state ? mask : 0)) {
-            if (uno::micros() - startMicros >= timeout) return 0;
+            if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
         }
 
         const uint32_t pulseStart = uno::micros();
 
         while ((*reg & mask) == (state ? mask : 0)) {
-            if (uno::micros() - startMicros >= timeout) return 0;
+            if (uno::micros() - startMicros >= timeout) {SREG = oldSREG; return 0;}
         }
 
+        SREG = oldSREG;
         return uno::micros() - pulseStart;
     }
     template<uint8_t PIN> uint32_t pulseIn(bool state) {
@@ -371,7 +387,9 @@ namespace uno
     }
     template<uint8_t PIN, func_ptr USER_FUNC, uint8_t INT_MODE> void attachInterrupt(void) 
     {
-        static_assert(INT_MODE < 4, "ERROR: only 3 modes CHANGE(1), FALLING(2), RISING(3)")
+        static_assert(INT_MODE < 4, "ERROR: only 3 modes CHANGE(1), FALLING(2), RISING(3)");
+        uint8_t oldSREG{SREG};
+        cli();
         uint8_t bit{hardwearLvl<PIN>::BIT};
 
         if(PIN == 2) 
@@ -426,9 +444,12 @@ namespace uno
             uno::privat::modes[PIN] = INT_MODE;
             uno::privat::last_port_C = PINC;
         }
+        SREG = oldSREG;
     }
-    template <uint8_t PIN> void detachInterrupt(void) 
+    template<uint8_t PIN> void detachInterrupt(void) 
     {
+        uint8_t oldSREG{SREG};
+        cli();
         uint8_t bit{hardwearLvl<PIN>::BIT};
 
         if (PIN == 2) 
@@ -441,6 +462,7 @@ namespace uno
             PCMSK0 &= ~(1 << bit);
         else if (PIN >= 14 && PIN <= 19)
             PCMSK1 &= ~(1 << bit);
+        SREG = oldSREG;
     }
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance);
