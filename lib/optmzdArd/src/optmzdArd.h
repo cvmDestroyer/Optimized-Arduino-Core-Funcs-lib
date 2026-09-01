@@ -62,8 +62,6 @@ constexpr uint8_t _LOW           {0x00};
 
 constexpr bool performance      {true};
 
-extern volatile uint8_t currentPin;
-
 namespace ard // <- done
 {
     void pinMode(uint8_t pin, uint8_t mode);
@@ -121,19 +119,19 @@ namespace uno
 {
     namespace privat
     {
-        extern volatile uint8_t currentPin;
+        extern volatile uint8_t current_pin;
         extern volatile uint32_t timer0_millis;
         extern volatile uint8_t timer0_fract;
         extern volatile uint32_t timer0_overflow_count;
 
-        extern volatile func_ptr callbacks[20] = {nullptr};
-        extern volatile func_ptr int0_func = {nullptr};
-        extern volatile func_ptr int1_func = {nullptr};
-        extern volatile uint8_t modes[20] = {0};
+        extern volatile func_ptr callbacks[20];
+        extern volatile func_ptr int0_func;
+        extern volatile func_ptr int1_func;
+        extern volatile uint8_t modes[20];
 
-        extern volatile uint8_t last_port_B = 0;
-        extern volatile uint8_t last_port_C = 0;
-        extern volatile uint8_t last_port_D = 0;
+        extern volatile uint8_t last_port_B;
+        extern volatile uint8_t last_port_C;
+        extern volatile uint8_t last_port_D;
     }
     void pinMode(uint8_t pin, uint8_t func);     // <- done
     void digitalWrite(uint8_t pin, bool val);    // <- done
@@ -286,8 +284,10 @@ namespace uno
         constexpr uint8_t channel = hardwearLvl<PIN>::ADC_CH;
         
         ADMUX = (ADMUX & 0xF0) | (channel & 0x07);
+        ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
         ADCSRA |= (1 << ADSC);
-        while (ADCSRA & (1 << ADSC));
+        while (ADCSRA & (1 << ADSC))
+            ; // null statement
 
         return ADC;
     }
@@ -308,7 +308,7 @@ namespace uno
         while ((*reg & mask) == (state ? mask : 0)) {
             if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
         } 
-        while ((*reg & mask) == (state ? mask : 0)) {
+        while ((*reg & mask) != (state ? mask : 0)) {
             if (cycles++ >= maxCycles) {SREG = oldSREG; return 0;}
         }
     
@@ -355,7 +355,7 @@ namespace uno
     {
         if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); digitalWrite<PIN>(_LOW); return; }
         
-        uno::privat::currentPin = PIN;
+        uno::privat::current_pin = PIN;
         uno::pinMode<PIN>(_OUTPUT);
 
         uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
@@ -387,12 +387,13 @@ namespace uno
     }
     template<uint8_t PIN, func_ptr USER_FUNC, uint8_t INT_MODE> void attachInterrupt(void) 
     {
-        static_assert(INT_MODE < 4, "ERROR: only 3 modes CHANGE(1), FALLING(2), RISING(3)");
+        static_assert(INT_MODE < 4, "CHANGE = 1, FALLING = 2, RISING = 3");
+        static_assert(USER_FUNC != nullptr, "USER_FUNC must be a non-null function pointer; pass &myISR as USER_FUNC");
         uint8_t oldSREG{SREG};
         cli();
         uint8_t bit{hardwearLvl<PIN>::BIT};
 
-        if(PIN == 2) 
+        if(PIN == 2)
         {
             EICRA &= ~((1 << ISC00) | (1 << ISC01));
             if (INT_MODE == FALLING) 
@@ -401,9 +402,9 @@ namespace uno
                 EICRA |= (1 << ISC01) | (1 << ISC00);
             else if (INT_MODE == CHANGE) 
                 EICRA |= (1 << ISC00);
-
-            EIFR |= (1 << INTF0);
+            
             uno::privat::int0_func = USER_FUNC; 
+            EIFR |= (1 << INTF0);
             EIMSK |= (1 << INT0);
         }
         else if(PIN == 3) 
@@ -416,8 +417,8 @@ namespace uno
             else if (INT_MODE == CHANGE) 
                 EICRA |= (1 << ISC10);
 
+            uno::privat::int1_func = USER_FUNC;
             EIFR |= (1 << INTF1);
-            uno::privat::int0_func = USER_FUNC;
             EIMSK |= (1 << INT1);
         }
         else if (PIN <= 7)

@@ -43,7 +43,7 @@ namespace uno
 {
     namespace privat
     {
-        volatile uint8_t currentPin = 0;
+        volatile uint8_t current_pin = 0;
         volatile uint32_t toggleCount = 0;
         volatile uint32_t timer0_millis = 0;
         volatile uint8_t timer0_fract = 0;
@@ -124,9 +124,9 @@ namespace uno
 
         } else if (pin >= 14 && pin <= 19) {
             if (val)
-                PORTB |= (1 << (pin - 14));
+                PORTC |= (1 << (pin - 14));
             else
-                PORTB &= ~(1 << (pin - 14));
+                PORTC &= ~(1 << (pin - 14));
 
         }
         
@@ -381,7 +381,7 @@ namespace uno
         }
         else if (pin >= 14 && pin <= 19) 
         {
-            uint8_t bit = (1 << pin);
+            uint8_t bit = (1 << (pin - 14));
             uint8_t stateMask = state ? bit : 0;
             
             uint32_t cycles = 0;
@@ -454,9 +454,9 @@ namespace uno
             SREG = oldSREG;
             return uno::micros() - pulseStart; 
         }
-        else if (pin <= 14 && pin >= 19) 
+        else if (pin >= 14 && pin <= 19) 
         {
-            uint8_t bit = (1 << pin);
+            uint8_t bit = (1 << (pin - 14));
             uint8_t stateMask = state ? bit : 0;
             const uint32_t startMicros = uno::micros();
 
@@ -483,7 +483,7 @@ namespace uno
         // here we do the other method whith the ISR
         // but its basicly the same thing as 'void tone(uint16_t frequency);'
         if (frequency < 31) { TIMSK2 &= ~(1 << OCIE2A); uno::digitalWrite(pin ,_LOW); return; }
-        uno::privat::currentPin = pin;
+        uno::privat::current_pin = pin;
         uno::pinMode(pin, _OUTPUT);
 
         uint32_t prescaler = (frequency < 244) ? 1024 : (frequency < 488) ? 256 :
@@ -539,7 +539,7 @@ namespace uno
                 EICRA |= (1 << ISC11) | (1 << ISC10);
             else if (mode == CHANGE) 
                 EICRA |= (1 << ISC10);
-            uno::privat::int0_func = userFunc;
+            uno::privat::int1_func = userFunc;
             EIMSK |= (1 << INT1);
         }
         else if (pin <= 7)
@@ -665,14 +665,14 @@ namespace uno
 }
 
 ISR(TIMER2_COMPA_vect) { 
-    uno::digitalWrite(uno::privat::currentPin, !uno::digitalRead(uno::privat::currentPin));
+    uno::digitalWrite(uno::privat::current_pin, !uno::digitalRead(uno::privat::current_pin));
 
     if (uno::privat::toggleCount > 0) {
         uno::privat::toggleCount--;
         
         if (uno::privat::toggleCount == 0) {
             TIMSK2 &= ~(1 << OCIE2A);
-            uno::digitalWrite(uno::privat::currentPin, LOW);
+            uno::digitalWrite(uno::privat::current_pin, LOW);
         }
     } 
 } 
@@ -703,7 +703,6 @@ ISR(TIMER2_COMPA_vect) {
 
 ISR(PCINT0_vect) {
     uint8_t current = PINB;
-    // XOR zeigt nur die Bits an, die sich verändert haben
     uint8_t changed = current ^ uno::privat::last_port_B;
     uno::privat::last_port_B = current;
 
@@ -729,9 +728,9 @@ ISR(PCINT2_vect) {
     uint8_t changed = current ^ uno::privat::last_port_D;
     uno::privat::last_port_D = current;
 
-    for (uint8_t bit = 0; bit < 8; bit++) { // 8 Pins (0 bis 7)
+    for (uint8_t bit = 0; bit < 8; bit++) {
         if (changed & (1 << bit)) {
-            uint8_t pin = bit; // Pin 0..7
+            uint8_t pin = bit;
             func_ptr cb = uno::privat::callbacks[pin];
             if (!cb) continue;
 
