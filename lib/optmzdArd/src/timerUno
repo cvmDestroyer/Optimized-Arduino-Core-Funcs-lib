@@ -127,6 +127,7 @@ void example()
 }
 ISR(TIMER0_OVF_vect) // vector for TOIE0
 {
+    something();
     /* CODE */
 }
 
