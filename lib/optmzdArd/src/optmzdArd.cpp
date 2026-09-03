@@ -9,7 +9,7 @@
 
 // THIS HAS HIGH RISK ONLY UNCOMMENT IF YOU KNOW WHAT UR DOING
 // THIS COULD KILL OTHER LIBS if you uncomment '#define ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0'
-// timer 0 zero will run on ctc NOT fast-pwm and kill pin 5 and 6
+// timer 0 zero will run on ctc NOT fast-pwm and kill pin 5 and 6, the Servo lib and others
 // #define ENABLE_UNO_HIGH_RISK_HIGH_PRECISION_TIMER_0
 
 namespace ard 
@@ -43,11 +43,13 @@ namespace uno
 {
     namespace privat
     {
-        volatile uint8_t current_pin = 0;
-        volatile uint32_t toggleCount = 0;
-        volatile uint32_t timer0_millis = 0;
-        volatile uint8_t timer0_fract = 0;
-        volatile uint32_t timer0_overflow_count = 0;
+        volatile uint8_t current_pin{0};
+        volatile uint32_t toggle_count{0};
+        volatile uint32_t timer0_millis{0};
+        volatile uint8_t timer0_fract{0};
+        volatile uint32_t timer0_overflow_count{0};
+        
+        volatile uint8_t analog_refrece{0b010000}; // DEFAULT REFS0 is bit 6 REFS1 is bit 7
         
         volatile func_ptr callbacks[20] = {nullptr};
         volatile func_ptr int0_func = {nullptr};
@@ -147,14 +149,15 @@ namespace uno
     }
     uint16_t analogRead(uint8_t pin)
     {
+        if (pin >= 20 && pin <= 13)
+            return 0;
+
         uint8_t oldSREG{SREG};
         cli();
-
-        if (pin >= 14)
-            pin -= 14;
         
-        ADMUX = (1 << REFS0) | (pin & 0x07);
-
+        ADMUX = 0;
+        ADMUX |= (uno::privat::analog_refrece) | (pin - 14);
+        DIDR0 |= (1 << (pin - 14));
         ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
         ADCSRA |= (1 << ADSC);
@@ -162,6 +165,7 @@ namespace uno
         while (ADCSRA & (1 << ADSC))
             ;
 
+        DIDR0 &= ~(1 << (pin - 14));
         SREG = oldSREG;
         return ADC;
     }
@@ -172,11 +176,11 @@ namespace uno
         // THE FIRST NUM IST ALWAYS REFS0 AND THE SECOND IS REFS1
             
         if (mode == _INTERNAL)      // INTERNAL (REFS0 = 1, REFS1 = 1)
-            ADMUX |= (1 << REFS0) | (1 << REFS1); 
+            uno::privat::analog_refrece = 0b11000000; 
         else if (mode == _EXTERNAL) // EXTERNAL (REFS0 = 0, REFS1 = 0)
-            ADMUX &= ~((1 << REFS0) | (1 << REFS1)); 
+            uno::privat::analog_refrece = 0b00000000;
         else                        // DEFAULT  (REFS0 = 1, REFS1 = 0)
-            ADMUX = (ADMUX & ~(1 << REFS1) | (1 << REFS0)); 
+            uno::privat::analog_refrece = 0b01000000;
     }
     void analogWrite(uint8_t pin, uint8_t val) // clang-format off
     { 
@@ -255,7 +259,7 @@ namespace uno
             } break;
 
         default: // incase someone trys it on digital pin
-            digitalWrite(pin, (val <= 128) ? false : true);
+            uno::digitalWrite(pin, (val <= 128) ? false : true);
             break;
 
         }
@@ -504,9 +508,9 @@ namespace uno
         uno::tone(pin, frequency);
 
         if (duration > 0) 
-            uno::privat::toggleCount = (2UL * frequency * duration) / 1000UL;
+            uno::privat::toggle_count = (2UL * frequency * duration) / 1000UL;
         else 
-            uno::privat::toggleCount = 0;
+            uno::privat::toggle_count = 0;
 
     }
     void noTone(uint8_t pin) {
@@ -588,20 +592,24 @@ namespace uno
     // extras
     uint16_t analogRead(uint8_t pin, bool modePeformance)
     {
+        if (pin >= 20 && pin <= 13)
+            return 0;
+
         uint8_t oldSREG{SREG};
         cli();
-
-        ADCSRA |= (1 << ADPS2);
-        ADCSRA &= ~(1 << ADPS1);
-        ADCSRA &= ~(1 << ADPS0);
-
-        ADMUX = (ADMUX & 0xF0) | (pin & 0x0F);
+        
+        ADMUX = 0;
+        ADMUX |= (uno::privat::analog_refrece) | (pin - 14);
+        DIDR0 |= (1 << (pin - 14));
+        ADCSRA = 0;
+        ADCSRA |= (1 << ADEN) | (1 << ADPS2) | (1 << ADPS0);
 
         ADCSRA |= (1 << ADSC);
 
         while (ADCSRA & (1 << ADSC))
             ;
 
+        DIDR0 &= ~(1 << (pin - 14));
         SREG = oldSREG;
         return ADC;
     }
@@ -667,10 +675,10 @@ namespace uno
 ISR(TIMER2_COMPA_vect) { 
     uno::digitalWrite(uno::privat::current_pin, !uno::digitalRead(uno::privat::current_pin));
 
-    if (uno::privat::toggleCount > 0) {
-        uno::privat::toggleCount--;
+    if (uno::privat::toggle_count > 0) {
+        uno::privat::toggle_count--;
         
-        if (uno::privat::toggleCount == 0) {
+        if (uno::privat::toggle_count == 0) {
             TIMSK2 &= ~(1 << OCIE2A);
             uno::digitalWrite(uno::privat::current_pin, LOW);
         }

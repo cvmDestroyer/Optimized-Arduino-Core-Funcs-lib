@@ -60,7 +60,7 @@ constexpr uint8_t _INPUT_PULLUP  {0x02};
 constexpr uint8_t _HIGH          {0x01};
 constexpr uint8_t _LOW           {0x00};
 
-constexpr bool performance      {true};
+constexpr bool performance       {true};
 
 namespace ard // <- done
 {
@@ -106,7 +106,7 @@ namespace ard // <- done
     inline void initTimer(void) {;} // null statement
     // this is if someone wants to write a lib with optmzdArd.h included
     // the thought proccess is if someone writes a lib for every chip they might use something like this:
-    // #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+    // #if defined(__AVR_ATmega328P__)
     // namespace gpio = uno;
     // #else
     // namespace gpio = ard;
@@ -120,6 +120,7 @@ namespace uno
     namespace privat
     {
         extern volatile uint8_t current_pin;
+        extern volatile uint32_t toggle_count;
         extern volatile uint32_t timer0_millis;
         extern volatile uint8_t timer0_fract;
         extern volatile uint32_t timer0_overflow_count;
@@ -280,15 +281,22 @@ namespace uno
     template<uint8_t PIN> uint16_t analogRead(void) 
     {
         static_assert(hardwearLvl<PIN>::ADC_CH != 255, "ERROR: analogRead can only read anlog pins PWM DOES NOT COUNT(~pin) onyl A0 - A5");
-
-        constexpr uint8_t channel = hardwearLvl<PIN>::ADC_CH;
+        uint8_t oldSREG{SREG};
+        cli();
+        constexpr uint8_t channel{hardwearLvl<PIN>::ADC_CH};
+        constexpr uint8_t bit{hardwearLvl<PIN>::BIT};
         
-        ADMUX = (ADMUX & 0xF0) | (channel & 0x07);
+        ADMUX = 0;
+        ADMUX |= (uno::privat::analog_refrece) | (channel & 0x07);
+        DIDR0 |= (1 << bit);
         ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+        
         ADCSRA |= (1 << ADSC);
         while (ADCSRA & (1 << ADSC))
             ; // null statement
 
+        DIDR0 &= ~(1 << bit);
+        SREG = oldSREG;
         return ADC;
     }
     template<uint8_t PIN> void analogWrite(uint8_t val) {
@@ -376,9 +384,9 @@ namespace uno
         uno::tone<PIN>(frequency);
 
         if (duration > 0) 
-            uno::privat::toggleCount = (2UL * frequency * duration) / 1000UL;
+            uno::privat::toggle_count = (2UL * frequency * duration) / 1000UL;
         else 
-            uno::privat::toggleCount = 0; 
+            uno::privat::toggle_count = 0; 
     
     }
     template<uint8_t PIN> void noTone(void) {
