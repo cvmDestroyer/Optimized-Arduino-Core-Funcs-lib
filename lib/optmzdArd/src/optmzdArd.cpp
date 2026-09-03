@@ -112,7 +112,9 @@ namespace uno
         uint8_t oldSREG{SREG};
         cli();
 
-        if (pin >= 0 && pin <= 7) { 
+        util_uno::turnOffPWM(pin);
+
+        if (pin >= 0 && pin <= 7) {
             if (val) 
                 PORTD |= (1 << pin);
             else 
@@ -184,78 +186,87 @@ namespace uno
     }
     void analogWrite(uint8_t pin, uint8_t val) // clang-format off
     { 
-        switch (pin)
+        uint8_t oldSREG{SREG};
+        cli();
+        
+        switch (pin) // for explaination take a look in the analogUno file
         {
-        case 3:                           // it works the same but you have to do this for
-            if (val == 0) {               // every pwm part thats the only 'hard' thing
-                TCCR2A &= ~(1 << COM2B1); // but you just catch if pwm is not needed (0 and 255)
-                PORTD &= ~(1 << PORTD3);  // if its not needed just turn off pwm and use digitalWrite
-            } else if (val == 255) {      // else just use pwm and done
-                TCCR2A &= ~(1 << COM2B1); 
-                PORTD |= (1 << PORTD3);
+        case 3:                           
+            if (val == 0) {
+                TCCR2A &= ~(1 << COM2B1);
+                PORTD &= ~(1 << PD3);
+            } else if (val == 255) {
+                TCCR2A &= ~(1 << COM2B1);
+                PORTD |= (1 << PD3);
             } else {
-                TCCR2A |= (1 << COM2B1);
+                TCCR2A = (1 << WGM21) | (1 << WGM20) | (1 << COM2B1);
+                TCCR2B = (1 << CS22);
                 OCR2B = val;
             } break;
 
         case 11:
             if (val == 0) {
-                TCCR2A &= ~(1 << COM2A1);
-                PORTB &= ~(1 << PORTB3);
+                TCCR2A &= ~(1 << COM2B1);
+                PORTB &= ~(1 << PB3);
             } else if (val == 255) {
-                TCCR2A &= ~(1 << COM2A1);
-                PORTB |= (1 << PORTB3);
+                TCCR2A &= ~(1 << COM2B1);
+                PORTB |= (1 << PB3);
             } else {
-                TCCR2A |= (1 << COM2A1);
+                TCCR2A = (1 << WGM21) | (1 << WGM20) | (1 << COM2A1);
+                TCCR2B = (1 << CS22);
                 OCR2A = val;
             } break;
 
         case 5:
             if (val == 0) {
                 TCCR0A &= ~(1 << COM0B1);
-                PORTD &= ~(1 << PORTD5);
+                PORTD &= ~(1 << PD5);
             } else if (val == 255) {
                 TCCR0A &= ~(1 << COM0B1);
-                PORTD |= (1 << PORTD5);
+                PORTD |= (1 << PD5);
             } else {
-                TCCR0A |= (1 << COM0B1);
+                TCCR0A = (1 << WGM01) | (1 << WGM00) | (1 << COM0B1);
+                TCCR0B = (1 << CS01) | (1 << CS00);
                 OCR0B = val;
             } break;
 
         case 6:
             if (val == 0) {
                 TCCR0A &= ~(1 << COM0A1);
-                PORTD &= ~(1 << PORTD6);
+                PORTD &= ~(1 << PD6);
             } else if (val == 255) {
                 TCCR0A &= ~(1 << COM0A1);
-                PORTD |= (1 << PORTD6);
+                PORTD |= (1 << PD6);
             } else {
-                TCCR0A |= (1 << COM0A1);
+                TCCR0A = (1 << WGM01) | (1 << WGM00) | (1 << COM0A1);
+                TCCR0B = (1 << CS01) | (1 << CS00);
                 OCR0A = val;
-            } break;
-
-        case 9:
-            if (val == 0) {
-                TCCR1A &= ~(1 << COM1A1);
-                PORTB &= ~(1 << PORTB1);
-            } else if (val == 255) {
-                TCCR1A &= ~(1 << COM1A1);
-                PORTB |= (1 << PORTB1);
-            } else {
-                TCCR1A |= (1 << COM1A1);
-                OCR1A = val;
             } break;
 
         case 10:
             if (val == 0) {
                 TCCR1A &= ~(1 << COM1B1);
-                PORTB &= ~(1 << PORTB2);
+                PORTB &= ~(1 << PB2);
             } else if (val == 255) {
                 TCCR1A &= ~(1 << COM1B1);
-                PORTB |= (1 << PORTB2);
+                PORTB |= (1 << PB2);
             } else {
-                TCCR1A |= (1 << COM1B1);
+                TCCR1A = (1 << WGM10) | (1 << COM1B1);
+                TCCR1B = (1 << CS11) | (1 << CS10) | (1 << WGM12);
                 OCR1B = val;
+            } break;
+
+        case 9:
+            if (val == 0) {
+                TCCR1A &= ~(1 << COM1A1);
+                PORTB &= ~(1 << PB1);
+            } else if (val == 255) {
+                TCCR1A &= ~(1 << COM1A1);
+                PORTB |= (1 << PB1);
+            } else {
+                TCCR1A = (1 << WGM10) | (1 << COM1A1);
+                TCCR1B = (1 << CS11) | (1 << CS10) | (1 << WGM12);
+                OCR1A = val;
             } break;
 
         default: // incase someone trys it on digital pin
@@ -263,6 +274,7 @@ namespace uno
             break;
 
         }
+        SREG = oldSREG;
     }
 
     uint32_t millis() {
