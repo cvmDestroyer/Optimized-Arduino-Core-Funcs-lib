@@ -1,33 +1,40 @@
-#include <Arduino.h>
+#include <Arduino.h> // clang-format off
 
-// IF THIS IS YOUR FIRST EXPLAINATION FILE YOUR IN THE WRONG PLACE THIS IS EXPLAINATION FILE NUMBER 4
-// if you wanna learn more this is the road map start at portsUno
-// portsUno -> analogUno -> timerUno -> interruptsUno
-//
-// the thing with innterrupts is kinda easy but can be confusing in my lib i use too version (for UNO)
-// the first method is universal and its called PCINT it is very simpel you just use the pin change
-// intterupts control register (PCICR) here you can control wich main registers Interrupts to activate
-// the bits are btw the same as the num so: 0 1 2
-//                                   PCIE0          PCIE1        PCIE2
-//                                 group0(B)      group1(C)    group2(D)
-// the ISR vectors are                |              |            |
-//                                PCINT0_vect   PCINT1_vect   PCINT2_vect
-// to select which pins should get to fire interrupts just use the PCMSK here you
-// just chanage the bit that the pin has just like PORT or DDR or PIN ...
-//                                  PCMSK0         PCMSK1        PCMSK2
-// there is a catch tough as you may noticed we have 8 pins per intterupt group that means
-// if too pins use the attachIntterupt function with the same 'interrupt group' you havbe to use
-// some vars to figure out the right pins interrupt
-//
-// also there is ONLY CHANGE. the ISR will fire everytime the pin changes thats why we have to
-// have some if statemenrs in the interrupt for FALLING or RISING
-//
-// MY second option is to use INT0/INT1 these are registers for interrupts on pin 3 and 2 here we
-// DONT have to do the rise and falling part ourer self cuz luckly INT0/1 can do these things on
-// theire on also digitalPinToInterrupt(pin) is not needed for our attachInterrupt cuz
-// it litery just chooses between these two options if im not mistaken
-// so lets start with the template thingy
+/*
+  IF THIS IS YOUR FIRST EXPLAINATION FILE YOUR IN THE WRONG PLACE THIS IS EXPLAINATION FILE NUMBER 4
+  if you wanna learn more this is the road map start at portsUno
+  portsUno -> analogUno -> timerUno -> interruptsUno
+  .
+  this file is a explaination file and is not needed for the optmzdArd lib delete at your will
+  sorry if there are some grammatical mistakes im not good with languages not even in my mother-langueage (german)
+  i make many easy mistakes but just so you know i've tried my best
+*/
 
+/*
+  the thing with innterrupts is kinda easy but can be confusing in my lib i use too version (for UNO)
+  the first method is universal and its called PCINT it is very simpel you just use the pin change
+  intterupts control register (PCICR) here you can control wich main registers Interrupts to activate
+  the bits are btw the same as the num so: 0 1 2
+  .                                 PCIE0          PCIE1        PCIE2
+  .                               group0(B)      group1(C)    group2(D)
+  the ISR vectors are                |              |            |
+  .                              PCINT0_vect   PCINT1_vect   PCINT2_vect
+  to select which pins should get to fire interrupts just use the PCMSK here you
+  just chanage the bit that the pin has just like PORT or DDR or PIN ...
+  .                                PCMSK0         PCMSK1        PCMSK2
+  there is a catch tough as you may noticed we have 8 pins per intterupt group that means
+  if too pins use the attachIntterupt function with the same 'interrupt group' you havbe to use
+  some vars to figure out the right pins interrupt
+  .
+  also there is ONLY CHANGE. the ISR will fire everytime the pin changes thats why we have to
+  have some if statemenrs in the interrupt for FALLING or RISING
+  .
+  MY second option is to use INT0/INT1 these are registers for interrupts on pin 3 and 2 here we
+  DONT have to do the rise and falling part ourer self cuz luckly INT0/1 can do these things on
+  theire on also digitalPinToInterrupt(pin) is not needed for our attachInterrupt cuz
+  it litery just chooses between these two options if im not mistaken
+  so lets start with the template thingy
+*/
 // clang-format off
 typedef void (*func_ptr)();
 
@@ -95,33 +102,36 @@ ISR(PCINT2_vect) {
         current_user_func();
 }
 
-// there is a problem here and thats only one pin works per Port
-// but i'll fix that in the optmzdArd lib look in there if i already did it
-// '
-// okay first we have to learn some new registers
-// External Interrupt Control Register A(EICRA) is the one we use for the RISING CHANGE and FALLING
-// cuz unlike PCINT INT has these features out of the box
-// ISC1x and ISC0x are the macros to change the helper bits macros in EICRA
-// here is which combi does what:
-// ISCx0     ISCx1    MODE     WHAZ IT DOES
-//    0         0      LOW      fires the hole time as long as pin is LOW
-//    0         1      FALLING  fires if it goes from HIGH to LOW (5v -> 0v) 
-//    1         0      CHANGE   fires if it changes regardless of HIGH to LOW or LOW to HIGH
-//    1         1      RISING   fires if it goes from LOW to HIGH (0v -> 5v)
-// 
-// External Interrupt Mask Register (EIMSK) is the same thing as PCMASK but instead of 3 there is only 1
-// and bit 0(INT0) is pin2 and bit 1(INT1) is pin3 the main difrence is that we dont activate a group but an
-// direct pin
-// 
-// External Interrupt Flag Register (EIFR) is the last register but i wont use it because i dont see the
-// point in using it cuz in what i understand it doesnt do anything besides tracking if it should go in to an
-// ISR if cli is called at the same time for example so it saves it (1) and releases agaein in ISR(0) this 
-// also exist for PCINT but again i dont know why i should change it but it name is 
-// PCIFR but instead of changing a pin you chnage the whole interrupt gruop ex: PCIFR |= (1 << PCIF0); // or PCIF1, PCIF2
-// the vectors for INT1/2 are just INT1_vect and INT2_vect if you were wondering
-// 
-// to be honest if you want to do it yourself trust its not that hard but im to lazy now this file is only for
-// my only future self if i foreget what each register does i have the same kind of files for the PORT DRR PIN and timer...
-// but i dont know if i will post this to github or not the other files i diodnt either but there i also did my explaining
-// a little bit weird so i dont wanna post something zhat im not comfortable to share with the whole internet and its in german
-// if you wanna see the final version just look in the optmzdArd file. happy coding :)
+/*
+  there is a problem here and thats only one pin works per Port
+  but i'll fix that in the optmzdArd lib look in there if i already did it
+  .
+  okay first we have to learn some new registers
+  External Interrupt Control Register A(EICRA) is the one we use for the RISING CHANGE and FALLING
+  cuz unlike PCINT INT has these features out of the box
+  ISC1x and ISC0x are the macros to change the helper bits macros in EICRA
+  here is which combi does what:
+  ISCx0     ISCx1    MODE     WHAZ IT DOES
+  .  0         0      LOW      fires the hole time as long as pin is LOW
+  .  0         1      FALLING  fires if it goes from HIGH to LOW (5v -> 0v) 
+  .  1         0      CHANGE   fires if it changes regardless of HIGH to LOW or LOW to HIGH
+  .  1         1      RISING   fires if it goes from LOW to HIGH (0v -> 5v)
+  .
+  External Interrupt Mask Register (EIMSK) is the same thing as PCMASK but instead of 3 there is only 1
+  and bit 0(INT0) is pin2 and bit 1(INT1) is pin3 the main difrence is that we dont activate a group but an
+  direct pin
+  .
+  External Interrupt Flag Register (EIFR) is the last register but i wont use it because i dont see the
+  point in using it cuz in what i understand it doesnt do anything besides tracking if it should go in to an
+  ISR if cli is called at the same time for example so it saves it (1) and releases agaein in ISR(0) this 
+  also exist for PCINT but again i dont know why i should change it but it name is 
+  PCIFR but instead of changing a pin you chnage the whole interrupt gruop ex: PCIFR |= (1 << PCIF0); // or PCIF1, PCIF2
+  the vectors for INT1/2 are just INT1_vect and INT2_vect if you were wondering
+  .
+  to be honest if you want to do it yourself trust its not that hard but im to lazy now this file is only for
+  my only future self if i foreget what each register does i have the same kind of files for the PORT DRR PIN and timer...
+  but i dont know if i will post this to github or not the other files i diodnt either but there i also did my explaining
+  a little bit weird so i dont wanna post something zhat im not comfortable to share with the whole internet and its in german
+  if you wanna see the final version take a look in the optmzdArd files
+  .                             happy coding :)
+*/

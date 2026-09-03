@@ -1,0 +1,263 @@
+#include <Arduino.h> // clang-format off
+
+/*
+  IF THIS IS YOUR FIRST EXPLAINATION FILE YOUR IN THE WRONG PLACE THIS IS EXPLAINATION FILE NUMBER 2
+  if you wanna learn more this is the road map start at portsUno :
+  portsUno -> analogUno -> timerUno -> interruptsUno
+  .
+  this file is a explaination file and is not needed for the optmzdArd lib delete at your will
+  sorry if there are some grammatical mistakes im not good with languages not even in my mother-langueage (german)
+  i make many easy mistakes but just so you know i've tried my best
+*/
+
+/*
+  alright in this file we are gonna have a look on the analog registers that are needed for analogRead              
+  we also gonna do the analogWrite function but even though it isnt realy 'analog'Write but more like 'pwm'Write    
+  but first we gonna have to know some registers these are 'ADMUX', 'ADCSRA', 'ADC(ADCL, ASCH)' and 'DIDR0'         
+  .                                                                                                                 
+  the first register we gonna take a lokk at is the ADC Multiplexer Selection Register or ADMUX                     
+  with it you can control the refrence voltage basicly 'analogRefrence()', align the measurement result,            
+  and select the input pin (A0–A5). we're gonna focus on the refrece thingy first there are two makros              
+  for refrence voltage and there called 'REFS1' and 'REFS0' here is a quick tabel so you can know their             
+  modes in detail:                                                                                                  
+  .   REFS1     |     REFS0      |    refrence volatage    |              describtion                               
+  --------------|----------------|-------------------------|-----------------------------------------
+  .     0       |       0        |    EXTERNAL AREF-pin    |   uses the external voltage on AREF-pin                
+  .     0       |       1        |    DEFAULT 5 or 3.3V    |   default uses 5V or 3.3V system voltage               
+  .     1       |       0        |        reserved         |               dont use                                 
+  .     1       |       1        |      INTERNAL 1.1V      |    switches to internal presice 1.1V                   
+  .                                                                                                                 
+  now you might already think you know how to write the analogRefrence function and you right you can               
+  i encourage you to do that if your not sure if you did it right take a look at the optmzdArd.cpp file
+  but for analogRead you need to say which pin should be examend and you can do that with MUX0, MUX1, MUX2, MUX3    
+  again here is a small tabel which pin is which MUX combination but its basicly just a counter with binary:        
+  .   MUX3   |   MUX2   |   MUX1    |    MUX0    |   analog pin  |   describtion                                    
+  -----------|----------|-----------|------------|---------------|-------------------------------------------------------------------------------
+  .     0    |     0    |     0     |      0     |       A0      |   analog pin                                    
+  .     0    |     0    |     0     |      1     |       A1      |   analog pin                                     
+  .     0    |     0    |     1     |      0     |       A2      |   analog pin                                     
+  .     0    |     0    |     1     |      1     |       A3      |   analog pin                                     
+  .     0    |     1    |     0     |      0     |       A4      |   analog pin                                     
+  .     0    |     1    |     0     |      1     |       A5      |   analog pin                                     
+  .     0    |     1    |     1     |      0     |       A6      |   analog pin (nano)
+  .     0    |     1    |     1     |      1     |       A7      |   analog pin (nano)
+  .     1    |     0    |     0     |      0     |       ~       |   internal temperature sensor of actual chip
+  .     1    |     1    |     1     |      0     |       ~       |   internal 1.1V bandgap voltage (can be used to measure own operation voltage)
+  .     1    |     1    |     1     |      1     |       ~       |   0V / GND (handy for calibrations)
+  .                                                                                                                 
+  here is a small explaination of how to count in binary (if you already know kip to line 77)                              
+  but its pretty s1mpel dont worry. so i basicly works like this imagne we have 1 byte thats 8bits                  
+  with these 8bit we can create number from 0 - 255 but how you might ask? well you start at 1                      
+  and every number after get multiplied by 2 so for one byte this is the bit and its number                        
+  remeber computer start at 0 so our first bit will be bit 0 NOT bit 1 and also binary is read right to left
+  .                                                                                                                 
+  .   bit 7    bit 6    bit 5    bit 4    bit 3    bit 2    bit 1    bit 0                                    
+  .    128      64       32       16        8        4        2        1                                            
+  .                                                                                                                 
+  now we just flip the bits to 1 if this number should be added. after that you just add                            
+  all bits which are 1 together and just like that you've got all numbers you could imagne of                       
+  here are some examples if you didnt understand yet:                                                               
+  .                                                                                                                 
+  .   00110011 is 32 + 16 + 2 + 1 =  51                                                                             
+  .   11111111 is 128 + 64 + 32 + 16 + 8 + 4 + 2 + 1 = 255 (thats why 1 bytes max size is 255)                        
+  .                                                                                                                 
+  if you wanna do these binary stuff with negative number 'signed' than the tabel looks a bit diffrent:             
+  .                                                                                                                 
+  .   bit 7    bit 6    bit 5    bit 4    bit 3    bit 2    bit 1    bit 0                                    
+  .   -128      +64      +32      +16       +8       +4       +2       +1                                            
+  .                                                                                                                
+  but it basicly is the same thing only difrence if bit 7 is set to 1 it doesnt add 128 but subtract 128            
+  here are some examples and remaber ONLY 128 is negative the rest is still positive                                
+  .                                                                                                                 
+  .   11111111 is -128 + 64 + 32 + 16 + 8 + 2 + 1 = -1                                                              
+  .   01111111 is  64 + 32 + 16 + 8 + 2 + 1 = 127                                                             
+  .   10000000 is -128 + 0 = -128                                                            
+  .   10010110 is -128 + 16 + 4 + 2 = -106                                                                          
+*/
+/*                                                                                                                
+  okay that took a while but hopefuly now you know how to count in binary its an important skill better             
+  learn it now than never now we can focus on a nother register called Digital Input Disable Register 0
+  or DIDR0 for short the whole thing it does deactivate the digital input function (as in the name descriped)
+  to reduse noise while measuring ADC it works like PORT or PIN you just change the pin with the corosponding bit
+  bit 6 and 7 ARE NOT beeing used not even by for example nano because those are reserved remeber the nano analog
+  pin A6 and A7 are analog ONLY pins unlike A0 - A5 where digitalRead still works
+  bit set to 1 deactivates these digitalRead functions for digitalRead on analog pins the corosponding bit in
+  DIDR has to be set to 0
+*/
+void example() 
+{
+    DIDR0 |= (1 << 1); // turn off digital input on pin A1
+    DIDR0 &= ~(1 << 0); // turn on digital input on pin A0
+}
+namespace analogUno {
+/*
+  next up
+  ADC Control and Status Register A                  
+  or ADCSRA for short it enables ADC (the register that gives us our values to return) and start ADC                
+  the last thing it does is select the prescaler for the ADC in other words how fast the ADC goes all              
+  the makros for bits are down below in another tabel:                                                              
+  .                                                                                                                 
+  PRESCALER BITS                                                                                                    
+  .  ADPS2  |  ADPS1  |  ADPS0  |  ADC-clock  |  prescaler  |  rating                                           
+  .---------|---------|---------|-------------|-------------|------------------------------------------
+  .    0    |    0    |    0    |    8 MHz    |      2      |   WAY to fast                                      
+  .    0    |    0    |    1    |    8 MHz    |      2      |   WAY to fast                                      
+  .    0    |    1    |    0    |    4 MHz    |      4      |   to fast                                          
+  .    0    |    1    |    1    |    2 MHz    |      8      |   to fast                                          
+  .    1    |    0    |    0    |    1 MHz    |      16     |   very fast but loses accuracy              
+  .    1    |    0    |    1    |   500 kHz   |      32     |   still fast but less accuracy gets lost           
+  .    1    |    1    |    0    |   250 kHz   |      64     |   nice balance between accuracy and speed          
+  .    1    |    1    |    1    |   125 kHz   |     128     |   standard with optimal accuracy                   
+  .                                                                                                                 
+  Other useful macros are ADC ENable or ADEN for shoert as the name implies this needs to be set to 1               
+  or the whole ADC thing does not work                                                                              
+  .                                                                                                                 
+  to sart the ADC you use the bit ADSC (ADC Start Conversion) this bit will automaticly be set to 0 after             
+  the ADC is done with the result of the measurement                                                                
+  to get the ADC value just type 'return ADC;' or store in a variable depens on what you want to do with it
+  something to note the result of ADC is measured in 10-bit so the value range is 0 - 1023
+                                                                                                                 
+  now you have every thing you need to know and we can start the analogRead coding part                             
+  again i encourage you to try is your self if your done down below is my version:                                  
+*/
+uint16_t analogRead(uint8_t pin)
+{
+    uint8_t oldSREG{SREG};
+    cli();
+
+    if (pin <= 13 && pin >= 19) // if it isnt a analog pin
+        return 0;               // return 0
+
+    ADMUX = (1 << REFS0) | (pin - 14); // turn on default refrence and the MUX
+    DIDR0 |= (1 << (pin - 14));        // turn off digital input
+    // precaler of 128 but of course you can use a faster one and enable ADC
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS2) | (1 << ADPS2);
+    
+    ADCSRA |= (1 << ADSC); // start ADC
+
+    while (ADCSRA & (1 << ADSC)) // if ADC is done ADSC filps to 0 remember?
+        ; // null statement
+    
+    DIDR0 &= ~(1 << (pin - 14)); // so the user is still able to use digitalRead
+    // ADCSRA &=  ~(1 << ADEN);  // dont disable ADC if you do your function wont work because
+    //                              ADC takes some time to deliver correct values and if you turn it off the next 
+    //                              analogRead will not deliver correct values
+    SREG = oldSREG;
+    return ADC;                  // and finaly return the result
+}
+
+/*
+  Okay that was the analogRead part now we come to analogWrite even tho its called analog
+  is isnt analog and only works on pwm pins (digital pin) they are marked as '~' on your board
+  but its alittle bit weird because you have to use some timer registers but why you may ask
+  well first of all we have to clarifie how we simulate something 'analog' remember the pins 
+  with ~ arent real analog pins but just pwm pins. we cant give the pin 'less' power but we
+  can turn them on and off realy quick. there is a catch tho as you might have noticed not every
+  pin has pwm and thats because pwm pins are directly connected to timers on the Arduino Uno there
+  are only 3 timers and we can house 2 pins per timer therefore the max pwm pins are 6 pins
+  here are they all listet and their timers:
+  .            pin 5 and pin 6  on timer 0 (8bit)
+  .            pin 9 and pin 10 on timer 1 (16bit)
+  .            pin 3 amd pin 11 on timer 2 (8bit)
+  .
+  so i wont go in to much detail if you want more details take a look in ther timerUno file.
+  there is one control register per timer which lets you control the modes for analogWrite (we
+  just use fast PWM 8bit) and it lets you connect the hardwear timer with pin. the register is
+  called TCCRxA. the WGMx2, WGMx1, WGMx0 bits are the bits which control the mode. there is
+  something to be aware tho and that is that WGMx2 IS NOT in TCCRxA but in TCCRxB because
+  there was to little space in TCCRxA if you want a tabel with all WGMxx bits take look in
+  timerUno
+  for now just type this to activate fast PWM 8bit on timer2 and timer0:
+  .       TCCRxA = (1 << WGMx1) | (1 << WGMx0);  // activate fast PWM 8bit on 8bit timer2 and timer0
+  .       TCCRxA |= (1 << COMxx1);               // connect timer with pin
+  . 
+  for now just type this to activate fast PWM 8nit on timer1:
+  .       TCCR1A = (1 << WGM10);                 // activate fast PWM 8bit on 16bit timer1
+  .       TCCR1B |= (1 << WGM12);                // this is needed for fast PWM else it would be PWM, phase correct (8bit)
+  .       TCCR1A |= (1 << COM1x1);               // connect timer with pin 
+
+  the last step is to use a prescaler just like in analogRead but this time the bits are called diffrent
+  CSx2, CSx1, CSx0 and are for the TCCRxB register if you want a tabel for every combination look in the
+  timerUno file for now just type this:
+  for timer2
+  .       TCCR2B |= (1 << CS22); // prescaler of 64
+  .
+  for timer1 and timer0
+  .       TCCRxB |= (1 << CSx1) | 1 << CSx0); // prescaler of 64
+  .
+  the last step is to give OCRxA and OCRxB the values you want the pin
+  run on (your value from analorWrite(pin, VALUE);)
+  okay i dont want you to figure out your self which pin is in which timer and which COMxx1 to use so here
+  is a small tabel with all you need to know to write your own analogWrite :
+  .        
+  .    pin | COMxx1 | OCRxx | TCCRxA | TCCRxB | CSx2 | CSx1 | CSx0 | WGMx2(TCCRxB) | WGMx1(TCCRxA) | WGMx0(TCCRxA) 
+  .  ------|--------|-------|--------|--------|------|------|------|---------------|---------------|---------------  
+  .     3  | COM2B1 | OCR2B | TCCR2A | TCCR2B | CS22 |  ~~  |  ~~  |       ~       |     WGM21     |     WGM20     
+  .     5  | COM0B1 | OCR0B | TCCR0A | TCCR0B |  ~~  | CS01 | CS00 |       ~       |     WGM01     |     WGM00     
+  .     6  | COM0A1 | OCR0A | TCCR0A | TCCR0B |  ~~  | CS01 | CS00 |       ~       |     WGM01     |     WGM00     
+  .     9  | COM1A1 | OCR1A | TCCR1A | TCCR1B |  ~~  | CS11 | CS10 |     WGM12     |       ~       |     WGM10     
+  .    10  | COM1B1 | OCR1B | TCCR1A | TCCR1B |  ~~  | CS11 | CS10 |     WGM12     |       ~       |     WGM10     
+  .    11  | COM2A1 | OCR2A | TCCR2A | TCCR2B | CS22 |  ~~  |  ~~  |       ~       |     WGM21     |     WGM20     
+*/
+void analogWrite(uint8_t pin, uint8_t val)
+{
+    uint8_t oldSREG{SREG};
+    cli();
+
+    switch (pin) // okay as you may notice all pins have diffrent Makros 
+    {            // but a long if statement is ugly thats why we just use switch for each pin
+    case 3:      // timer 2
+        if (val == 0) {               // if val is 0
+            TCCR2A &= ~(1 << COM2B1); // disconnect timer with pin
+            PORTD &= ~(1 << PD3);     // and digitalWrite(3, LOW);
+        } else if (val == 255) {      // if val is 255
+            TCCR2A &= ~(1 << COM2B1); // disconnect timer with pin
+            PORTD |= (1 << PD3);      // and digitalWrite(3, HIGH);
+        } else {
+            TCCR2A = (1 << WGM21) | (1 << WGM20) | (1 << COM2B1); // turn on fast PWM + connect pin with timer
+            TCCR2B = (1 << CS22); // prescaler of 64
+            OCR2B = val; // give OCR2B the val it does the rest
+        }
+        break;
+
+    case 5:    // timer 0
+        if (val == 0) {               // if val is 0
+            TCCR0A &= ~(1 << COM0B1); // disconnect timer with pin
+            PORTD &= ~(1 << PD5);     // and digitalWrite(5, LOW);
+        } else if (val == 255) {      // if val is 255
+            TCCR0A &= ~(1 << COM0B1); // disconnect timer with pin
+            PORTD |= (1 << PD5);      // and digitalWrite(5, HIGH);
+        } else {
+            TCCR0A = (1 << WGM01) | (1 << WGM00) | (1 << COM0B1); // turn on fast PWM + connect pin with timer
+            TCCR0B = (1 << CS01) | (1 << CS00); // prescaler of 64 (remeber timer 2 is difrent than timer0 and timer1)
+            OCR0B = val; // give OCR0B the val it does the rest
+        }
+        break;
+
+    case 9:    // timer 1
+        if (val == 0) {               // if val is 0
+            TCCR1A &= ~(1 << COM1A1); // disconnect timer with pin
+            PORTB &= ~(1 << PB1);     // and digitalWrite(9, LOW);
+        } else if (val == 255) {      // if val is 255
+            TCCR1A &= ~(1 << COM1A1); // disconnect timer with pin
+            PORTB |= (1 << PB1);      // and digitalWrite(9, HIGH);
+        } else {
+            TCCR1A = (1 << WGM10) | (1 << COM1A1); // turn on PWM, phase correct (8bit) + connect pin with timer
+            TCCR1B = (1 << CS11) | (1 << CS10) | (1 << WGM12); // prescaler of 64 + flip bit WGM12 t o1 so it runs on fast PWM (8bit) not PWM, phase correct (8bit)
+            OCR1A = val; // give OCR1A the val it does the rest
+        }
+        break;
+    
+    default:
+        digitalWrite(pin, (val >= 128) ? HIGH : LOW);
+        break;
+    }
+    SREG = oldSREG;
+}
+/*
+  alright you can do the rest if you want now you should know everything you need to know if you wanna
+  see the final version take a look in the optmzdArd.cpp file. if you wann learn more follow the roadmap 
+  (next is timerUno)
+  .                                    happy coding :)
+*/
+}

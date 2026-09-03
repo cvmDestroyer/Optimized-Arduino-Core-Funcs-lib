@@ -1,32 +1,32 @@
-#include <Arduino.h>
+#include <Arduino.h> // clang-format off
 
+/*
+  IF THIS IS YOUR FIRST EXPLAINATION FILE YOUR IN THE RIGHT PLACE THIS IS EXPLAINATION FILE NUMBER 1
+  if you wanna learn more this is the road map
+  portsUno -> analogUno -> timerUno -> interruptsUno
+  .
+  this file is a explaination file and is not needed for the optmzdArd lib delete at your will
+  sorry if there are some grammatical mistakes im not good with languages not even in my mother-langueage (german)
+  i make many easy mistakes but just so you know i've tried my best
+*/
+
+/*
+  alright first of all we need learn some things that are important for the whole libary
+  if you already know bit operators skip to line '49' but for those who dont here are bit operators
+  and what they do and why bit operators?
+  first of all you have imagine byte in there there are 8bit you might already know that
+  but the Arduino Uno uses registers and the diffrent bits do diffrent suff so the most important things
+  are to set bits to 0 and 1 and that done like this:
+*/
 #define REGISTER (*(volatile uint8_t *)(0xFF)) // this shouldnt exsist just so nothing breaks
 #define BIT0 0                                 // this btw just so if someone selects C++
 #define BIT1 1                                 // in their editor as language it get correct syntax
-
-// clang-format off
-namespace portsUno
-{
-// IF THIS IS YOUR FIRST EXPLAINATION FILE YOUR IN THE RIGHT PLACE THIS IS EXPLAINATION FILE NUMBER 1
-// if you wanna learn more this is the road map
-// portsUno -> analogUno -> timerUno -> interruptsUno
-//
-// this file is a explaination file and is not needed for the optmzdArd lib delete at your will
-// sorry if there are some grammatical mistakes im not good with languages not even in my mother-langueage (german)
-// i make many easy mistakes but just so you know i've tried my best
-// '
-// alright first of all we need learn some things that are important for the whole libary
-// if you already know bit operators skip to line '44' but for those who dont here are bit operators
-// and what they do and why bit operators?
-// first of all you have imagine byte in there there are 8bit you might already know that
-// but the Arduino Uno uses registers and the diffrent bits do diffrent suff so the most important things
-// are to set bits to 0 and 1 and that done like this:
 
 bool what_is_bit_0()
 {
     REGISTER |= (1 << BIT0);  // this is how to set a bit to 1
     REGISTER &= ~(1 << BIT0); // this is how to set a bit to 0 i looks wrong because of 1 << BIT0
-                              // but it isnt it doesnt work with 0 << BIT0
+    //                           but it isnt it doesnt work with 0 << BIT0
     // if more bits should be set to 1 or 0 this is how
     REGISTER |= (1 << BIT0) | (1 << BIT1);    // if you want to set bit0 and bit1 to 1
     REGISTER = (1 << BIT0) | (1 << BIT1);     // if you want to delete all bits and want to set bit0 and bit1 to 1
@@ -37,36 +37,39 @@ bool what_is_bit_0()
         return 1;
     if (!(REGISTER & (1 << BIT0))) // this if you want to see if its 0
         return 0;
-    // here is what each chackter does
-    // OR  operator '|' sets to 1 as long as one ore two bits are 1
-    // AND operator '&' sets to 1 if both bits are 1 else 0
-    // NOT operator '~' sets every bit to its counter part so 1 -> 0, 0 -> 1
-    // XOR operator '^' sets to 1 if the compared bits are diffrent else 0
+    /*
+      here is what each chackter does
+      OR  operator '|' sets to 1 as long as one or two bits are 1
+      AND operator '&' sets to 1 if both bits are 1 else 0
+      NOT operator '~' sets every bit to its counter part so 1 -> 0, 0 -> 1
+      XOR operator '^' sets to 1 if the compared bits are diffrent else 0
+    */
 }
-
-// alright now you should know the basics but to be honest i dont use other methods either
-// but there are other things you can do with bit operators now we take a look at our first
-// Uno register and that will be PORTx but before we jump in to programming we need to learn
-// some thing first and that is the architecture of the pins.
-// they are stored in a byte so therefore there are only 8bits but all 19 pins had to be stored
-// in to a register bit if you do the math you may notice that 19 doesnt fit in 8 so they split
-// the 19 bits in 3 registers each has its own identifier letter (B, C, D)
-// 0 - 7   are stored in D (dont ask me why idk)
-// 8 - 13  are stored in B
-// 14 - 19 are stored in C
-// but you have to remeber something bits are not the same as pins
-// pin 8 is NOT bit 8 but bit 0:
-//                                                                    14   15   16   17   18   19
-// pins : 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | A0 | A1 | A2 | A3 | A4 | A5 |
-// ---------|---|---|---|---|---|---|---|---|---|----|----|----|----|----|----|----|----|----|----|
-// bits : 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 0 | 1 |  2 |  3 |  4 |  5 |  0 |  1 |  2 |  3 |  4 |  5 |
-//      |_______________________________|___________________________|_____________________________|
-//                   8 bit (D)                    6 bit (B)                      6 bit (C)
-//
-// alright now we can program out first Arduino Core function
-// the register PORT is used for digitalWrite so lets rewrite digitalWrite()
-// if the pin bit is equals to 1 it is HIGH if it is 0 its LOW
-
+namespace portsUno {
+/*
+  alright now you should know the basics but to be honest i dont use other methods either
+  but there are other things you can do with bit operators now we take a look at our first
+  Uno register and that will be PORTx but before we jump in to programming we need to learn
+  some thing first and that is the architecture of the pins.
+  they are stored in a byte so therefore there are only 8bits but all 19 pins had to be stored
+  in to a register bit if you do the math you may notice that 19 doesnt fit in 8 so they split
+  the 19 bits in 3 registers each has its own identifier letter (B, C, D)
+  0 - 7   are stored in D (dont ask me why idk)
+  8 - 13  are stored in B
+  14 - 19 are stored in C
+  but you have to remeber something bits are not the same as pins
+  pin 8 is NOT bit 8 but bit 0:
+  .                                                                  14   15   16   17   18   19
+  pins : 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | A0 | A1 | A2 | A3 | A4 | A5 |
+  -----|---|---|---|---|---|---|---|---|---|---|----|----|----|----|----|----|----|----|----|----|
+  bits : 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 0 | 1 |  2 |  3 |  4 |  5 |  0 |  1 |  2 |  3 |  4 |  5 |
+  .    |_______________________________|___________________________|_____________________________|
+  .                 8 bit (D)                    6 bit (B)                      6 bit (C)
+  .
+  alright now we can program out first Arduino Core function
+  the register PORT is used for digitalWrite so lets rewrite digitalWrite()
+  if the pin bit is equals to 1 it is HIGH if it is 0 its LOW
+*/
 void digitalWrite(uint8_t pin, bool high)
 {
     uint8_t bit{};
@@ -98,24 +101,24 @@ void digitalWrite(uint8_t pin, bool high)
             PORTC &= ~(1 << bit); //
     }
 }
-
-// alright there are two more registers that are useful and simple which are used for
-// pinMode() and digitalRead() they are called PINx and DDRx here is how to use them
-// first PINx its just like PORTx except of rewriting bits you have to read the bits
-// and return if its true/1 if the bit is 1 and 0 if the bit is false/0
-// i encourage you to try it yourself first [ a little hint is in the bit operator part ;) ]
-// 
-// if your done you can see if its correct here is my version :
-// remember if your version is diffrent then mine it doesnt mean
-// that yours is any worse in C++ there are many ways to do
-// the same thing and even if its not 100% correct dont worry we all
-// startet small just dont give up. C++ is hard but i belive in you :)
-// (this message is for the less experienced C++ devs
-// if your not a beginner and know what your doing your version is prob
-// better i myself aint that good of a porgrammer so please dont come
-// for me if i did a 'nooby' thing (like the var bit) but you have to
-// remember this file is for beginners not for C++ gods)
-
+/*
+  alright there are two more registers that are useful and simple which are used for
+  pinMode() and digitalRead() they are called PINx and DDRx here is how to use them
+  first PINx its just like PORTx except of rewriting bits you have to read the bits
+  and return if its true/1 if the bit is 1 and 0 if the bit is false/0
+  i encourage you to try it yourself first [ a little hint is in the bit operator part ;) ]
+  .
+  if your done you can see if its correct here is my version :
+  remember if your version is diffrent then mine it doesnt mean
+  that yours is any worse in C++ there are many ways to do
+  the same thing and even if its not 100% correct dont worry we all
+  startet small just dont give up. C++ is hard but i belive in you :)
+  (this message is for the less experienced C++ devs
+  if your not a beginner and know what your doing your version is prob
+  better i myself aint that good of a porgrammer so please dont come
+  for me if i did a 'nooby' thing (like the var bit) but you have to
+  remember this file is for beginners not for C++ gods)
+*/
 bool digitalRead(uint8_t pin)
 {
     uint8_t bit{};
@@ -147,23 +150,24 @@ bool digitalRead(uint8_t pin)
             return false;
     }
 }
-
-// alright if you realy did the programming part first (even if it wasnt correct) im proud of you
-// and now i want you to programm pinMode your self i'll tell you how to use the DDRx register and 
-// you'll programm it. DDR is the register to do the INPUT and OUTPUT part
-// if the DDRx pin bit is set to 1 its internaly seen as OUTPUT if its 0 its seen as INPUT
-// if you cant remember which is which remeber if the the first letter is O dont use 0 use 1 
-// and if the first letter is I dont use 1 use 0. and remember PULLUP is just INPUT with the PORTx register
-// set to 1 as well.
-// but this time there is a catch you have to stop interrupts for the time the program is in pinMode
-// and release it after. cli() is the function to stop all interrupts and sei() to release them again
-// we didnt need them in digitalRead() because it is fast and doesnt change bits but pinMode does (digitalWrite needs it to if you want add it)
-// therefore we need to stop interrupts. for this you have to learn one last register called SREG.
-// SREG just saves if interrupts are alowed or not and you have to set it to what was before your function
-// because if you just cli() at the start and sei() at the end something else might need still cli() because it was cli()
-// before you said cli() its complicated but just use what i'll say:
-// you can do that with a helper var i like to call them oldSREG and just initialize them with the SREG after that
-// you let the program run your function and in the last line you just set SREG to oldSREG:
+/*
+  alright if you realy did the programming part first (even if it wasnt correct) im proud of you
+  and now i want you to programm pinMode your self i'll tell you how to use the DDRx register and 
+  you'll programm it. DDR is the register to do the INPUT and OUTPUT part
+  if the DDRx pin bit is set to 1 its internaly seen as OUTPUT if its 0 its seen as INPUT
+  if you cant remember which is which remeber if the the first letter is O dont use 0 use 1 
+  and if the first letter is I dont use 1 use 0. and remember PULLUP is just INPUT with the PORTx register
+  set to 1 as well.
+  but this time there is a catch you have to stop interrupts for the time the program is in pinMode
+  and release it after. cli() is the function to stop all interrupts and sei() to release them again
+  we didnt need them in digitalRead() because it is fast and doesnt change bits but pinMode does (digitalWrite needs it to if you want add it)
+  therefore we need to stop interrupts. for this you have to learn one last register called SREG.
+  SREG just saves if interrupts are alowed or not and you have to set it to what was before your function
+  because if you just cli() at the start and sei() at the end something else might need still cli() because it was cli()
+  before you said cli() its complicated but just use what i'll say:
+  you can do that with a helper var i like to call them oldSREG and just initialize them with the SREG after that
+  you let the program run your function and in the last line you just set SREG to oldSREG:
+*/
 void correctDigitalWrite(uint8_t pin, bool high) 
 {
     uint8_t oldSREG{SREG};
@@ -171,8 +175,9 @@ void correctDigitalWrite(uint8_t pin, bool high)
     /* digtalWrite code you wrote earlier */
     SREG = oldSREG;
 }
-// okay now you can start programming again my version will be below again have fun :)
-
+/*
+  okay now you can start programming again my version will be below again. have fun :)
+*/
 void pinMode(uint8_t pin, uint8_t mode)
 {
     uint8_t oldSREG{SREG};
@@ -238,7 +243,10 @@ void pinMode(uint8_t pin, uint8_t mode)
 
     SREG = oldSREG;
 }
-// alright thats it for this file if you wanna know more take a look in the analogUno file
-// and of course if you want to look at the final version of pinMode, digitalRead and digitalWrite
-// take a look in the optmzdArd files. happy coding :)
+/*
+  alright thats it for this file if you wanna know more take a look in the analogUno file
+  and of course if you want to look at the final version of pinMode, digitalRead and digitalWrite
+  take a look in the optmzdArd files
+  .                                          happy coding :)
+*/
 }
