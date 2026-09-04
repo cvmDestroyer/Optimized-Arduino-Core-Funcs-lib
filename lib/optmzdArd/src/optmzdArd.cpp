@@ -163,12 +163,13 @@ namespace uno
         ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
         ADCSRA |= (1 << ADSC);
+        SREG = oldSREG;
 
         while (ADCSRA & (1 << ADSC))
             ;
 
         DIDR0 &= ~(1 << (pin - 14));
-        SREG = oldSREG;
+        
         return ADC;
     }
     void analogReference(uint8_t mode)
@@ -199,7 +200,7 @@ namespace uno
                 TCCR2A &= ~(1 << COM2B1);
                 PORTD |= (1 << PD3);
             } else {
-                TCCR2A = (1 << WGM21) | (1 << WGM20) | (1 << COM2B1);
+                TCCR2A |= (1 << WGM21) | (1 << WGM20) | (1 << COM2B1);
                 TCCR2B = (1 << CS22);
                 OCR2B = val;
             } break;
@@ -212,7 +213,7 @@ namespace uno
                 TCCR2A &= ~(1 << COM2B1);
                 PORTB |= (1 << PB3);
             } else {
-                TCCR2A = (1 << WGM21) | (1 << WGM20) | (1 << COM2A1);
+                TCCR2A |= (1 << WGM21) | (1 << WGM20) | (1 << COM2A1);
                 TCCR2B = (1 << CS22);
                 OCR2A = val;
             } break;
@@ -225,7 +226,7 @@ namespace uno
                 TCCR0A &= ~(1 << COM0B1);
                 PORTD |= (1 << PD5);
             } else {
-                TCCR0A = (1 << WGM01) | (1 << WGM00) | (1 << COM0B1);
+                TCCR0A |= (1 << WGM01) | (1 << WGM00) | (1 << COM0B1);
                 TCCR0B = (1 << CS01) | (1 << CS00);
                 OCR0B = val;
             } break;
@@ -238,7 +239,7 @@ namespace uno
                 TCCR0A &= ~(1 << COM0A1);
                 PORTD |= (1 << PD6);
             } else {
-                TCCR0A = (1 << WGM01) | (1 << WGM00) | (1 << COM0A1);
+                TCCR0A |= (1 << WGM01) | (1 << WGM00) | (1 << COM0A1);
                 TCCR0B = (1 << CS01) | (1 << CS00);
                 OCR0A = val;
             } break;
@@ -251,7 +252,7 @@ namespace uno
                 TCCR1A &= ~(1 << COM1B1);
                 PORTB |= (1 << PB2);
             } else {
-                TCCR1A = (1 << WGM10) | (1 << COM1B1);
+                TCCR1A |= (1 << WGM10) | (1 << COM1B1);
                 TCCR1B = (1 << CS11) | (1 << CS10) | (1 << WGM12);
                 OCR1B = val;
             } break;
@@ -264,7 +265,7 @@ namespace uno
                 TCCR1A &= ~(1 << COM1A1);
                 PORTB |= (1 << PB1);
             } else {
-                TCCR1A = (1 << WGM10) | (1 << COM1A1);
+                TCCR1A |= (1 << WGM10) | (1 << COM1A1);
                 TCCR1B = (1 << CS11) | (1 << CS10) | (1 << WGM12);
                 OCR1A = val;
             } break;
@@ -617,12 +618,13 @@ namespace uno
         ADCSRA |= (1 << ADEN) | (1 << ADPS2) | (1 << ADPS0);
 
         ADCSRA |= (1 << ADSC);
-
+        SREG = oldSREG;
+        
         while (ADCSRA & (1 << ADSC))
             ;
 
         DIDR0 &= ~(1 << (pin - 14));
-        SREG = oldSREG;
+        
         return ADC;
     }
     void tone(uint16_t frequency)

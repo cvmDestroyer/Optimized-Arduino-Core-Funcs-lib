@@ -141,7 +141,7 @@ namespace uno
     bool digitalRead(uint8_t pin);               // <- done
     uint16_t analogRead(uint8_t pin);            // <- done
     void analogReference(uint8_t mode);          // <- done
-    void analogWrite(uint8_t pin, uint8_t uint); // <- done
+    void analogWrite(uint8_t pin, uint8_t val); // <- done
 
     uint32_t millis(void);                       // <- done
     uint32_t micros(void);                       // <- done
@@ -162,21 +162,20 @@ namespace uno
     // templates ------------------------------------------------------------------------------------------------
     // this just for the template part cool ik :)
     template<uint8_t PIN> struct hardwearLvl;
-    #define DEFINE_PIN(pin, port_letter, bit, adc_ch, is_pwm, pwm_reg, tccra_reg, tccrb_reg, com_bit, prescaler_bits, wgm_b, wgm_a) \
+    #define DEFINE_PIN(pin, port_letter, port_bit, adc_ch, is_pwm, pwm_reg, tccra_reg, tccrb_reg, com_bit, tccra_bits, tccrb_bits) \
     template<> struct hardwearLvl<pin> { \
-        static constexpr uintptr_t PORT            = (uintptr_t)&PORT##port_letter; \
-        static constexpr uintptr_t PIN_REG         = (uintptr_t)&PIN##port_letter; \
-        static constexpr uintptr_t DDR             = (uintptr_t)&DDR##port_letter; \
-        static constexpr uint8_t   BIT             = bit; \
-        static constexpr uint8_t   ADC_CH          = adc_ch; \
-        static constexpr bool      HAS_PWM         = is_pwm; \
-        static constexpr uintptr_t PWM_REG         = (uintptr_t)(pwm_reg); \
-        static constexpr uintptr_t TCCR_REG        = (uintptr_t)(tccra_reg); \
-        static constexpr uintptr_t TCCR_REG        = (uintptr_t)(tccrb_reg); \
-        static constexpr uint8_t   COM_BIT         = com_bit; \
-        static constexpr uint8_t   PRESCALER_BITS  = prescaler_bits; \
-        static constexpr uint8_t   WGM_BITS_B      = wgm_b; \
-        static constexpr uint8_t   WGM_BITS_A      = wgm_a; \
+        static constexpr uintptr_t PORT       = (uintptr_t)&PORT##port_letter; \
+        static constexpr uintptr_t PIN_REG    = (uintptr_t)&PIN##port_letter; \
+        static constexpr uintptr_t DDR        = (uintptr_t)&DDR##port_letter; \
+        static constexpr uint8_t   BIT        = port_bit; \
+        static constexpr uint8_t   ADC_CH     = adc_ch; \
+        static constexpr bool      HAS_PWM    = is_pwm; \
+        static constexpr uintptr_t PWM_REG    = (uintptr_t)(pwm_reg); \
+        static constexpr uintptr_t TCCRA_REG  = (uintptr_t)(tccra_reg); \
+        static constexpr uintptr_t TCCRB_REG  = (uintptr_t)(tccrb_reg); \
+        static constexpr uint8_t   COM_BIT    = com_bit; \
+        static constexpr uint8_t   TCCRA_BITS = tccra_bits; \
+        static constexpr uint8_t   TCCRB_BITS = tccrb_bits; \
     };
 
     // this took me TWO hour ✌️🫩
@@ -189,28 +188,30 @@ namespace uno
     // TCCRA: control-register a of timers (Timer/Counter Control Register) take look in timerUno
     // TCCRB: control-register b of timers (Timer/Counter Control Register) take look in timerUno
     // COM  : it is the bitmask to wire the pin to the hardware timer (Compare Output Mode)
+    // tccra bits: here are wgm set to fast pwm 8bit for analogWrite
+    // tccrb bits: prescaler bits set tp 64 + wgm2 bit set to fast pwm 8 bit (tiemer 2)
     // ---------------------------------------------------------------------------------------
-    //         pin  reg  bit  adc   pwm     OCR      TCCRA      TCCRB           COM     prescaler    WGM B     WGM B
-    DEFINE_PIN( 0,   D,   0,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 1,   D,   1,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 2,   D,   2,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 3,   D,   3,  255, true , &OCR2B,  &TCCR2A,   &TCCR2B,   (1 << COM2B1),    0x04,      0x00,     0x03       ) // com bit 5
-    DEFINE_PIN( 4,   D,   4,  255, false,    0,        0,         0,             0,         0,         0,        0         ) 
-    DEFINE_PIN( 5,   D,   5,  255, true , &OCR0B,  &TCCR0A,   &TCCR0B,   (1 << COM0B1),    0x03,      0x00,     0x03       ) // com bit 5
-    DEFINE_PIN( 6,   D,   6,  255, true , &OCR0A,  &TCCR0A,   &TCCR0B,   (1 << COM0A1),    0x03,      0x00,     0x03       ) // com bit 7
-    DEFINE_PIN( 7,   D,   7,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 8,   B,   0,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 9,   B,   1,  255, true , &OCR1A,  &TCCR1A,   &TCCR1B,   (1 << COM1A1),    0x03,      0x01,     0x08       ) // com bit 7
-    DEFINE_PIN( 10,  B,   2,  255, true , &OCR1B,  &TCCR1A,   &TCCR1B,   (1 << COM1B1),    0x03,      0x01,     0x08       ) // com bit 5
-    DEFINE_PIN( 11,  B,   3,  255, true , &OCR2A,  &TCCR2A,   &TCCR2B,   (1 << COM2A1),    0x04,      0x00,     0x03       ) // com bit 7
-    DEFINE_PIN( 12,  B,   4,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 13,  B,   5,  255, false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 14,  C,   0,   0,  false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 15,  C,   1,   1,  false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 16,  C,   2,   2,  false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 17,  C,   3,   3,  false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 18,  C,   4,   4,  false,    0,        0,         0,             0,         0,         0,        0         )
-    DEFINE_PIN( 19,  C,   5,   5,  false,    0,        0,         0,             0,         0,         0,        0         )
+    //         pin  reg  bit  adc   pwm      OCR      TCCRA     TCCRB        COM     tccra bits  tccrb bits
+    DEFINE_PIN( 0,   D,   0,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 1,   D,   1,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 2,   D,   2,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 3,   D,   3,  255, true ,  &OCR2B,  &TCCR2A,  &TCCR2B,  (1 << COM2B1),  0x03,       0x04   )
+    DEFINE_PIN( 4,   D,   4,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 5,   D,   5,  255, true ,  &OCR0B,  &TCCR0A,  &TCCR0B,  (1 << COM0B1),  0x03,       0x03   )
+    DEFINE_PIN( 6,   D,   6,  255, true ,  &OCR0A,  &TCCR0A,  &TCCR0B,  (1 << COM0A1),  0x03,       0x03   )
+    DEFINE_PIN( 7,   D,   7,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 8,   B,   0,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 9,   B,   1,  255, true ,  &OCR1A,  &TCCR1A,  &TCCR1B,  (1 << COM1A1),  0x01,       0x0B   )
+    DEFINE_PIN( 10,  B,   2,  255, true ,  &OCR1B,  &TCCR1A,  &TCCR1B,  (1 << COM1B1),  0x01,       0x0B   )
+    DEFINE_PIN( 11,  B,   3,  255, true ,  &OCR2A,  &TCCR2A,  &TCCR2B,  (1 << COM2A1),  0x03,       0x04   )
+    DEFINE_PIN( 12,  B,   4,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 13,  B,   5,  255, false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 14,  C,   0,   0,  false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 15,  C,   1,   1,  false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 16,  C,   2,   2,  false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 17,  C,   3,   3,  false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 18,  C,   4,   4,  false,     0,        0,        0,          0,         0,          0     )
+    DEFINE_PIN( 19,  C,   5,   5,  false,     0,        0,        0,          0,         0,          0     )
     
     template<uint8_t PIN, bool HAS_PWM = hardwearLvl<PIN>::HAS_PWM> // these are for anlogRead cuz
     struct analogWriteHelper {                                      // if constexpr only works cince C++ 17 and 
@@ -232,14 +233,12 @@ namespace uno
                 digitalWrite<PIN>(HIGH);
             }
             else {
-                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCRA_REG) = hardwearLvl<PIN>::COM_BIT | hardwearLvl<PIN>::WGM_BITS_A;
-                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCRB_REG) = hardwearLvl<PIN>::WGM_BITS_B | hardwearLvl<PIN>::PRESCALER_BITS;
-                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::PWM_REG) = val;
+                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCRA_REG) |= hardwearLvl<PIN>::COM_BIT | hardwearLvl<PIN>::TCCRA_BITS;
+                *reinterpret_cast<volatile uint8_t*>(hardwearLvl<PIN>::TCCRB_REG) = hardwearLvl<PIN>::TCCRB_BITS;
+                *reinterpret_cast<volatile uint16_t*>(hardwearLvl<PIN>::PWM_REG) = val;
             }
         }
     };
-
-    
 
     // templates
     template<uint8_t PIN> void pinMode(uint8_t func) 
@@ -297,16 +296,18 @@ namespace uno
         constexpr uint8_t bit{hardwearLvl<PIN>::BIT};
         
         ADMUX = 0;
-        ADMUX |= (uno::privat::analog_refrece) | (channel & 0x07);
+        ADMUX |= uno::privat::analog_refrece | channel;
         DIDR0 |= (1 << bit);
         ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
         
         ADCSRA |= (1 << ADSC);
+        SREG = oldSREG;
+        
         while (ADCSRA & (1 << ADSC))
             ; // null statement
 
         DIDR0 &= ~(1 << bit);
-        SREG = oldSREG;
+        
         return ADC;
     }
     template<uint8_t PIN> void analogWrite(uint8_t val) {
