@@ -11,10 +11,10 @@
     }
   ],
   "license": "MIT",
-  "homepage": "https://https://github.com/cvmDestroyer/Optimized-Arduino-Core-Funcs-lib",
+  "homepage": "https://https://github.com/cvmDestroyer/optmzdArd",
   "repository": {
     "type": "git",
-    "url": "https://https://github.com/cvmDestroyer/Optimized-Arduino-Core-Funcs-lib.git"
+    "url": "https://https://github.com/cvmDestroyer/optmzdArd.git"
   },
   "frameworks": "*",
   "platforms": "*",
